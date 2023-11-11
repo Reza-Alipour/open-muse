@@ -31,6 +31,8 @@ _deps = [
     "sentencepiece",  # for T5 tokenizer
     "plotly",
     "pandas",
+    "pillow",
+    "timm"
 ]
 
 _extras_dev_deps = [

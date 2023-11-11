@@ -1,5 +1,5 @@
 wandb:
-    entity: null
+    entity: r-ap
 
 experiment:
     project: "muse-vae"

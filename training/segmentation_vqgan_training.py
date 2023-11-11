@@ -37,7 +37,7 @@ from ema import EMAModel
 from muse import MOVQ, MaskGitVQGAN, VQGANModel
 from muse.lr_schedulers import get_scheduler
 from optimizer import Lion
-from training.discriminator import Discriminator
+from discriminator import Discriminator
 
 try:
     import apex

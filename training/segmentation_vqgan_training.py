@@ -377,7 +377,7 @@ def main():
     #################################
     logger.info("Creating dataloaders and lr_scheduler")
 
-    total_batch_size_without_accum = config.training.batch_size * accelerator.num_processes
+    # total_batch_size_without_accum = config.training.batch_size * accelerator.num_processes
     total_batch_size = (
             config.training.batch_size * accelerator.num_processes * config.training.gradient_accumulation_steps
     )
@@ -386,8 +386,6 @@ def main():
     # We use webdataset for data loading. The dataloaders are created with sampling with replacement.
     # We don't do dataset resuming here, instead we resample the shards and buffer each time. The sampling is stochastic.
     # This means that the dataloading is not deterministic, but it's fast and efficient.
-    preproc_config = config.dataset.preprocessing
-    dataset_config = config.dataset.params
     # dataset = ClassificationDataset(
     #     train_shards_path_or_url=dataset_config.train_shards_path_or_url,
     #     eval_shards_path_or_url=dataset_config.eval_shards_path_or_url,

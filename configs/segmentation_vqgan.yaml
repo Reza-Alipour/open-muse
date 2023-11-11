@@ -12,7 +12,7 @@ experiment:
     generate_every: 200
     log_every: 100
     log_grad_norm_every: 500
-    resume_from_checkpoint: True
+    resume_from_checkpoint: False
     resume_lr_scheduler: True
 
 model:

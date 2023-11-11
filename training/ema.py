@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterable, Optional, Union
 
 import numpy as np
 import torch
-from training.deprecate_utils import deprecate
+# from training.deprecate_utils import deprecate
 
 def enable_full_determinism(seed: int):
     """
@@ -87,12 +87,12 @@ class EMAModel:
                 "Passing a `torch.nn.Module` to `ExponentialMovingAverage` is deprecated. "
                 "Please pass the parameters of the module instead."
             )
-            deprecate(
-                "passing a `torch.nn.Module` to `ExponentialMovingAverage`",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False,
-            )
+            # deprecate(
+            #     "passing a `torch.nn.Module` to `ExponentialMovingAverage`",
+            #     "1.0.0",
+            #     deprecation_message,
+            #     standard_warn=False,
+            # )
             parameters = parameters.parameters()
 
             # set use_ema_warmup to True if a torch.nn.Module is passed for backwards compatibility
@@ -100,12 +100,12 @@ class EMAModel:
 
         if kwargs.get("max_value", None) is not None:
             deprecation_message = "The `max_value` argument is deprecated. Please use `decay` instead."
-            deprecate("max_value", "1.0.0", deprecation_message, standard_warn=False)
+            # deprecate("max_value", "1.0.0", deprecation_message, standard_warn=False)
             decay = kwargs["max_value"]
 
         if kwargs.get("min_value", None) is not None:
             deprecation_message = "The `min_value` argument is deprecated. Please use `min_decay` instead."
-            deprecate("min_value", "1.0.0", deprecation_message, standard_warn=False)
+            # deprecate("min_value", "1.0.0", deprecation_message, standard_warn=False)
             min_decay = kwargs["min_value"]
 
         parameters = list(parameters)
@@ -113,7 +113,7 @@ class EMAModel:
 
         if kwargs.get("device", None) is not None:
             deprecation_message = "The `device` argument is deprecated. Please use `to` instead."
-            deprecate("device", "1.0.0", deprecation_message, standard_warn=False)
+            # deprecate("device", "1.0.0", deprecation_message, standard_warn=False)
             self.to(device=kwargs["device"])
 
         self.temp_stored_params = None
@@ -181,12 +181,12 @@ class EMAModel:
                 "Passing a `torch.nn.Module` to `ExponentialMovingAverage.step` is deprecated. "
                 "Please pass the parameters of the module instead."
             )
-            deprecate(
-                "passing a `torch.nn.Module` to `ExponentialMovingAverage.step`",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False,
-            )
+            # deprecate(
+            #     "passing a `torch.nn.Module` to `ExponentialMovingAverage.step`",
+            #     "1.0.0",
+            #     deprecation_message,
+            #     standard_warn=False,
+            # )
             parameters = parameters.parameters()
 
         parameters = list(parameters)

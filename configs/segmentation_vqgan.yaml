@@ -20,7 +20,7 @@ model:
         type: "taming_vqgan"
         pretrained: "openMUSE/vqgan-f16-8192-laion"
     gradient_checkpointing: True
-    enable_xformers_memory_efficient_attention: True
+    enable_xformers_memory_efficient_attention: False
 
 
 dataset:

@@ -1,7 +1,11 @@
 # Byte-compiled / optimized / DLL files
+generated
+real
 output.jpg
 imagenet-vqgan-training
 wandb
+segmented.jpg
+
 __pycache__/
 *.py[cod]
 *$py.class

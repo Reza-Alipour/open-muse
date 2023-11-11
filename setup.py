@@ -21,13 +21,16 @@ from codecs import open
 import setuptools
 
 _deps = [
-    "transformers==4.26.1",
-    "accelerate==0.17.1",
+    "transformers==4.33",
+    "accelerate==0.21",
     "einops==0.6.0",
     "omegaconf==2.3.0",
     "webdataset>=0.2.39",
+    "datasets",
     "wandb",
     "sentencepiece",  # for T5 tokenizer
+    "plotly",
+    "pandas",
 ]
 
 _extras_dev_deps = [

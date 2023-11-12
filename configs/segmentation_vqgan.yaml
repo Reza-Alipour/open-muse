@@ -76,6 +76,6 @@ training:
     timm_discriminator_backend: "vgg19"
     timm_disc_layers: "features|pre_logits|head"
     timm_discr_offset: 0
-    vae_loss: "l2"
+    vae_loss: "l1"
     num_validation_log: 4
     discriminator_warmup: 100

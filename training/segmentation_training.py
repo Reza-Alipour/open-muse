@@ -41,7 +41,7 @@ from transformers import (
     T5EncoderModel,
     T5Tokenizer,
 )
-
+from transformers import Adafactor
 import muse
 import muse.training_utils
 from data import SegmentationDataset
@@ -261,7 +261,7 @@ def validate_model(
 
     for i, batch in enumerate(eval_dataloader):
         pixel_values, captions = batch['masks'], batch['captions']
-        captions = [f'Generate face segmentation | {c[random.randint(0, 9)]}' for c in captions]
+        captions = [f'Face segmentation | ID = {random.randint(0, 10000000000)}' for _ in captions]
         input_ids = tokenizer(
             captions,
             max_length=max_seq_length,
@@ -324,7 +324,7 @@ def generate_images(
     # fmt: on
 
     # read validation prompts from file
-    validation_prompts = [f'Generate face segmentation | {c}' for c in captions]
+    validation_prompts = [f'Face segmentation | ID = {random.randint(0, 10000000000)}' for _ in captions]
 
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":
@@ -507,6 +507,9 @@ def save_checkpoint(model, config, accelerator, global_step):
             save_function=accelerator.save,
             state_dict=state_dict,
         )
+
+        model.half().save_pretrained(save_path / "unwrapped_model_fp16")
+
         json.dump({"global_step": global_step}, (save_path / "metadata.json").open("w+"))
         logger.info(f"Saved state to {save_path}")
 
@@ -753,6 +756,8 @@ def main():
             optimizer_cls = apex.optimizers.FusedAdam
         else:
             raise ImportError("Please install apex to use fused_adam")
+    elif optimizer_type == "adafactor":
+        optimizer_cls = Adafactor
     elif optimizer_type == "8bit_adamw":
         try:
             import bitsandbytes as bnb
@@ -779,13 +784,23 @@ def main():
         },
     ]
 
-    optimizer = optimizer_cls(
-        optimizer_grouped_parameters,
-        lr=optimizer_config.learning_rate,
-        betas=(optimizer_config.beta1, optimizer_config.beta2),
-        weight_decay=optimizer_config.weight_decay,
-        eps=optimizer_config.epsilon,
-    )
+    if optimizer_cls == Adafactor:
+        optimizer = Adafactor(
+            model.parameters(),
+            scale_parameter=False,
+            relative_step=False,
+            warmup_init=False,
+            clip_threshold=0.5,
+            lr=optimizer_config.learning_rate
+        )
+    else:
+        optimizer = optimizer_cls(
+            optimizer_grouped_parameters,
+            lr=optimizer_config.learning_rate,
+            betas=(optimizer_config.beta1, optimizer_config.beta2),
+            weight_decay=optimizer_config.weight_decay,
+            eps=optimizer_config.epsilon,
+        )
 
     # Cretae mask scheduler
     if config.get("mask_schedule", None) is not None:
@@ -992,8 +1007,10 @@ def main():
     for epoch in range(first_epoch, num_train_epochs):
         model.train()
         for i, batch in enumerate(train_dataloader):
+            if i % 100 == 0:
+                accelerator.print(f'Epoch {epoch} | Step {i}')
             pixel_values, captions = batch['masks'], batch['captions']
-            captions = [f'Generate face segmentation | {c[epoch % 10]}' for c in captions]
+            captions = [f'Face segmentation | ID = {random.randint(0, 10000000000)}' for _ in captions]
             input_ids = tokenizer(
                 captions,
                 max_length=config.dataset.preprocessing.max_seq_length,

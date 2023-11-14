@@ -703,7 +703,9 @@ def main():
 
     model_cls = MaskGitTransformer if config.model.get("architecture", "transformer") == "transformer" else MaskGiTUViT
     if config.model.get("pretrained_model_path", None) is not None:
-        model = model_cls.from_pretrained(config.model.pretrained_model_path)
+        model = model_cls.from_pretrained('reza-alipour/muse-seg-gen-c')
+        model.half().save_pretrained('fp15/')
+        print('Half done')
     else:
         model = model_cls(**config.model.transformer)
     mask_id = model.config.mask_token_id

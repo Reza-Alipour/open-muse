@@ -34,6 +34,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.optim import AdamW  # why is shampoo not available in PT :(
+from transformers import Adafactor
 from transformers import (
     CLIPTextModel,
     CLIPTextModelWithProjection,
@@ -507,6 +508,7 @@ def save_checkpoint(model, config, accelerator, global_step):
             save_function=accelerator.save,
             state_dict=state_dict,
         )
+        model.half().save_pretrained(save_path / "unwrapped_model_fp16")
         json.dump({"global_step": global_step}, (save_path / "metadata.json").open("w+"))
         logger.info(f"Saved state to {save_path}")
 
@@ -753,6 +755,8 @@ def main():
             optimizer_cls = apex.optimizers.FusedAdam
         else:
             raise ImportError("Please install apex to use fused_adam")
+    elif optimizer_type == "adafactor":
+        optimizer_cls = Adafactor
     elif optimizer_type == "8bit_adamw":
         try:
             import bitsandbytes as bnb
@@ -779,13 +783,23 @@ def main():
         },
     ]
 
-    optimizer = optimizer_cls(
-        optimizer_grouped_parameters,
-        lr=optimizer_config.learning_rate,
-        betas=(optimizer_config.beta1, optimizer_config.beta2),
-        weight_decay=optimizer_config.weight_decay,
-        eps=optimizer_config.epsilon,
-    )
+    if optimizer_cls == Adafactor:
+        optimizer = Adafactor(
+            model.parameters(),
+            scale_parameter=False,
+            relative_step=False,
+            warmup_init=False,
+            clip_threshold=0.5,
+            lr=optimizer_config.learning_rate
+        )
+    else:
+        optimizer = optimizer_cls(
+            optimizer_grouped_parameters,
+            lr=optimizer_config.learning_rate,
+            betas=(optimizer_config.beta1, optimizer_config.beta2),
+            weight_decay=optimizer_config.weight_decay,
+            eps=optimizer_config.epsilon,
+        )
 
     # Cretae mask scheduler
     if config.get("mask_schedule", None) is not None:
@@ -992,6 +1006,8 @@ def main():
     for epoch in range(first_epoch, num_train_epochs):
         model.train()
         for i, batch in enumerate(train_dataloader):
+            if i % 100 == 0:
+                accelerator.print(f'Epoch {epoch} | Batch {i}')
             pixel_values, captions = batch['masks'], batch['captions']
             captions = [f'Generate face segmentation | {c[epoch % 10]}' for c in captions]
             input_ids = tokenizer(

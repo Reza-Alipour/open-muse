@@ -402,7 +402,7 @@ def main():
     # )
     dataset = SegmentationDataset(
         per_gpu_batch_size=config.training.batch_size,
-        dataset_name='reza-alipour/MM-CelebA-HQ-Dataset-256'
+        dataset_name='reza-alipour/vq-train'
     )
     train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
 

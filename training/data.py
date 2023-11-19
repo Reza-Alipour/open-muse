@@ -669,7 +669,7 @@ class SegmentationDataset:
             self,
             per_gpu_batch_size: int,
             dataset_name: str = 'reza-alipour/MM-CelebA-HQ-Dataset-256'):
-        self.ds = load_dataset(dataset_name)
+        self.ds = load_dataset(dataset_name).shuffle(seed=1337).select(range(256000))
 
         def custom_collate_fn(batch):
             masks = [sample['mask'] for sample in batch]
@@ -690,12 +690,12 @@ class SegmentationDataset:
             collate_fn=custom_collate_fn
         )
 
-        self._eval_dataloader = DataLoader(
-            self.ds['test'],
-            batch_size=per_gpu_batch_size,
-            shuffle=False,
-            collate_fn=custom_collate_fn
-        )
+        # self._eval_dataloader = DataLoader(
+        #     self.ds['test'],
+        #     batch_size=per_gpu_batch_size,
+        #     shuffle=False,
+        #     collate_fn=custom_collate_fn
+        # )
 
     @property
     def train_dataloader(self):
@@ -703,4 +703,4 @@ class SegmentationDataset:
 
     @property
     def eval_dataloader(self):
-        return self._eval_dataloader
+        return None

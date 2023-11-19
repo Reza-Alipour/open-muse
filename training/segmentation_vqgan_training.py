@@ -404,7 +404,7 @@ def main():
         per_gpu_batch_size=config.training.batch_size,
         dataset_name='reza-alipour/vq-train'
     )
-    train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
+    train_dataloader = dataset.train_dataloader
 
     lr_scheduler = get_scheduler(
         config.lr_scheduler.scheduler,

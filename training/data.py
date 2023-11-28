@@ -684,7 +684,7 @@ class SegmentationDataset:
             return {'masks': masks}
 
         self._train_dataloader = DataLoader(
-            self.ds['train'].select(range(256000)),
+            self.ds['train'],
             batch_size=per_gpu_batch_size,
             shuffle=True,
             collate_fn=custom_collate_fn

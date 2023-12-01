@@ -691,7 +691,7 @@ class SegmentationDataset:
             # if random.random() < 0.3:
             #     c_top, c_left, _, _ = transforms.RandomCrop.get_params(mask, output_size=(resolution, resolution))
             #     mask = transforms.functional.crop(mask, c_top, c_left, resolution, resolution)
-            masks = [transforms.ToTensor()(mask.convert('RGB')) for mask in masks]
+            masks = [transforms.ToTensor()(mask.convert('RGB').resize((256,256))) for mask in masks]
             masks = torch.stack(masks)
             return {'masks': masks, 'captions': captions}
 

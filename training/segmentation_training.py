@@ -67,7 +67,8 @@ except ImportError:
     is_apex_available = False
 
 logger = get_logger(__name__, log_level="INFO")
-
+hf_read_token = os.getenv('HF_READ_TOKEN')
+hf_write_token = os.getenv('HF_WRITE_TOKEN')
 
 def get_config():
     cli_conf = OmegaConf.from_cli()
@@ -262,7 +263,6 @@ def validate_model(
 
     for i, batch in enumerate(eval_dataloader):
         pixel_values, captions = batch['masks'], batch['captions']
-        captions = [f'Generate face segmentation | {c[random.randint(0, 9)]}' for c in captions]
         input_ids = tokenizer(
             captions,
             max_length=max_seq_length,
@@ -325,7 +325,8 @@ def generate_images(
     # fmt: on
 
     # read validation prompts from file
-    validation_prompts = [f'Generate face segmentation | {c}' for c in captions]
+    validation_prompts = [f'Generate face segmentation | {c}' for c in captions] + [f'Generate face landmark | {c}' for
+                                                                                    c in captions]
 
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":
@@ -338,8 +339,8 @@ def generate_images(
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained(config.model.vq_model.pretrained)
-
+        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp1500', token=hf_read_token)
+        weight_dtype = torch.float32
         if accelerator.mixed_precision == "fp16":
             weight_dtype = torch.float16
         elif accelerator.mixed_precision == "bf16":
@@ -690,7 +691,7 @@ def main():
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained(config.model.vq_model.pretrained)
+        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp1500', token=hf_read_token)
 
         # Freeze the text model and VQGAN
         text_encoder.requires_grad_(False)
@@ -702,7 +703,7 @@ def main():
 
     model_cls = MaskGitTransformer if config.model.get("architecture", "transformer") == "transformer" else MaskGiTUViT
     if config.model.get("pretrained_model_path", None) is not None:
-        model = model_cls.from_pretrained(config.model.pretrained_model_path)
+        model = model_cls.from_pretrained('R-AP/open-muse-seg256')
     else:
         model = model_cls(**config.model.transformer)
     mask_id = model.config.mask_token_id
@@ -820,7 +821,8 @@ def main():
 
     dataset = SegmentationDataset(
         per_gpu_batch_size=config.training.batch_size,
-        dataset_name='reza-alipour/MM-CelebA-HQ-Dataset-256'
+        dataset_name='reza-alipour/MM-CelebA-HQ-Dataset-256',
+        token=hf_read_token
     )
     train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
 
@@ -1009,7 +1011,6 @@ def main():
             if i % 100 == 0:
                 accelerator.print(f'Epoch {epoch} | Batch {i}')
             pixel_values, captions = batch['masks'], batch['captions']
-            captions = [f'Generate face segmentation | {c[epoch % 10]}' for c in captions]
             input_ids = tokenizer(
                 captions,
                 max_length=config.dataset.preprocessing.max_seq_length,

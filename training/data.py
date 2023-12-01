@@ -15,11 +15,11 @@
 
 # This file is heavily inspired by https://github.com/mlfoundations/open_clip/blob/main/src/training/data.py
 
-import os
 import io
 import itertools
 import json
 import math
+import os
 import random
 import re
 from functools import partial
@@ -30,9 +30,9 @@ import torch
 import webdataset as wds
 import yaml
 from braceexpand import braceexpand
+from datasets import load_dataset
 from torch.utils.data import default_collate, DataLoader
 from torchvision import transforms
-from datasets import load_dataset
 from transformers import PreTrainedTokenizer
 from webdataset.tariterators import (
     base_plus_ext,
@@ -149,24 +149,24 @@ def image_transform(example, resolution=256):
 
 class ClassificationDataset:
     def __init__(
-        self,
-        train_shards_path_or_url: Union[str, List[str]],
-        eval_shards_path_or_url: Union[str, List[str]],
-        num_train_examples: int,
-        per_gpu_batch_size: int,
-        global_batch_size: int,
-        num_workers: int,
-        resolution: int = 256,
-        return_text: bool = False,
-        tokenizer: PreTrainedTokenizer = None,
-        max_seq_length: int = 16,
-        center_crop: bool = True,
-        random_flip: bool = False,
-        imagenet_class_mapping_path=None,
-        shuffle_buffer_size: int = 1000,
-        pin_memory: bool = False,
-        persistent_workers: bool = False,
-        **kwargs,
+            self,
+            train_shards_path_or_url: Union[str, List[str]],
+            eval_shards_path_or_url: Union[str, List[str]],
+            num_train_examples: int,
+            per_gpu_batch_size: int,
+            global_batch_size: int,
+            num_workers: int,
+            resolution: int = 256,
+            return_text: bool = False,
+            tokenizer: PreTrainedTokenizer = None,
+            max_seq_length: int = 16,
+            center_crop: bool = True,
+            random_flip: bool = False,
+            imagenet_class_mapping_path=None,
+            shuffle_buffer_size: int = 1000,
+            pin_memory: bool = False,
+            persistent_workers: bool = False,
+            **kwargs,
     ):
         transform = ImageNetTransform(resolution, center_crop, random_flip)
 
@@ -275,13 +275,13 @@ class ClassificationDataset:
 
 class WebdatasetSelect:
     def __init__(
-        self,
-        min_size=256,
-        max_pwatermark=0.5,
-        min_aesthetic_score=4.9,
-        require_marked_as_ok_by_spawning=False,
-        require_marked_as_not_getty=False,
-        max_pnsfw=None,
+            self,
+            min_size=256,
+            max_pwatermark=0.5,
+            min_aesthetic_score=4.9,
+            require_marked_as_ok_by_spawning=False,
+            require_marked_as_not_getty=False,
+            max_pnsfw=None,
     ):
         self.min_size = min_size
         self.max_pwatermark = max_pwatermark
@@ -318,9 +318,9 @@ class WebdatasetSelect:
         # watermark
 
         if (
-            ("pwatermark" not in x_json or x_json["pwatermark"] is None)
-            and "watermark_score" not in x_json
-            and ("stability_metadata" not in x_json or "p_watermarkdf" not in x_json["stability_metadata"])
+                ("pwatermark" not in x_json or x_json["pwatermark"] is None)
+                and "watermark_score" not in x_json
+                and ("stability_metadata" not in x_json or "p_watermarkdf" not in x_json["stability_metadata"])
         ):
             return False
 
@@ -345,10 +345,10 @@ class WebdatasetSelect:
         # aesthetic
 
         if (
-            "aesthetic" not in x_json
-            and "AESTHETIC_SCORE" not in x_json
-            and "aesthetic_score_laion_v2" not in x_json
-            and ("stability_metadata" not in x_json or "aes_scorelv2" not in x_json["stability_metadata"])
+                "aesthetic" not in x_json
+                and "AESTHETIC_SCORE" not in x_json
+                and "aesthetic_score_laion_v2" not in x_json
+                and ("stability_metadata" not in x_json or "aes_scorelv2" not in x_json["stability_metadata"])
         ):
             return False
 
@@ -372,7 +372,7 @@ class WebdatasetSelect:
 
         if "stability_metadata" in x_json and "aes_scorelv2" in x_json["stability_metadata"]:
             is_under_min_aesthetic_threshold_stability_metadata = (
-                x_json["stability_metadata"]["aes_scorelv2"] < self.min_aesthetic_score
+                    x_json["stability_metadata"]["aes_scorelv2"] < self.min_aesthetic_score
             )
 
             if is_under_min_aesthetic_threshold_stability_metadata:
@@ -489,34 +489,34 @@ def ds_clean_map(sample):
 
 class Text2ImageDataset:
     def __init__(
-        self,
-        train_shards_path_or_url: Union[str, List[str]],
-        eval_shards_path_or_url: Union[str, List[str]],
-        tokenizer: PreTrainedTokenizer,
-        max_seq_length: int,
-        num_train_examples: int,
-        per_gpu_batch_size: int,
-        global_batch_size: int,
-        num_workers: int,
-        resolution: int = 256,
-        center_crop: bool = True,
-        random_flip: bool = False,
-        shuffle_buffer_size: int = 1000,
-        pin_memory: bool = False,
-        persistent_workers: bool = False,
-        is_pre_encoded: bool = False,
-        vae_checkpoint: Optional[str] = None,
-        text_encoder_checkpoint: Optional[str] = None,
-        use_filtered_dataset: bool = False,
-        require_marked_as_ok_by_spawning: bool = False,
-        require_marked_as_not_getty: bool = False,
-        max_pnsfw: Optional[float] = None,
-        max_pwatermark: Optional[float] = 0.5,
-        min_aesthetic_score: Optional[float] = 4.75,
-        min_size: Optional[int] = 256,
-        is_sdxl_synthetic_dataset: bool = False,
-        is_ds_clean_upscaled: bool = False,
-        is_ds_clean: bool = False,
+            self,
+            train_shards_path_or_url: Union[str, List[str]],
+            eval_shards_path_or_url: Union[str, List[str]],
+            tokenizer: PreTrainedTokenizer,
+            max_seq_length: int,
+            num_train_examples: int,
+            per_gpu_batch_size: int,
+            global_batch_size: int,
+            num_workers: int,
+            resolution: int = 256,
+            center_crop: bool = True,
+            random_flip: bool = False,
+            shuffle_buffer_size: int = 1000,
+            pin_memory: bool = False,
+            persistent_workers: bool = False,
+            is_pre_encoded: bool = False,
+            vae_checkpoint: Optional[str] = None,
+            text_encoder_checkpoint: Optional[str] = None,
+            use_filtered_dataset: bool = False,
+            require_marked_as_ok_by_spawning: bool = False,
+            require_marked_as_not_getty: bool = False,
+            max_pnsfw: Optional[float] = None,
+            max_pwatermark: Optional[float] = 0.5,
+            min_aesthetic_score: Optional[float] = 4.75,
+            min_size: Optional[int] = 256,
+            is_sdxl_synthetic_dataset: bool = False,
+            is_ds_clean_upscaled: bool = False,
+            is_ds_clean: bool = False,
     ):
         if f"{train_shards_path_or_url}.yaml" in os.listdir('./configs'):
             with open(f"./configs/{train_shards_path_or_url}.yaml") as f:
@@ -668,12 +668,24 @@ class SegmentationDataset:
     def __init__(
             self,
             per_gpu_batch_size: int,
-            dataset_name: str = 'reza-alipour/MM-CelebA-HQ-Dataset-256'):
-        self.ds = load_dataset(dataset_name)
+            dataset_name: str = 'reza-alipour/MM-CelebA-HQ-Dataset-256',
+            token: str = None
+    ):
+        self.ds = load_dataset(dataset_name, token = token)
 
         def custom_collate_fn(batch):
-            masks = [sample['mask'] for sample in batch]
-            captions = [sample['captions'] for sample in batch]
+            is_it_mask = random.randint(0, 1) == 1
+            column_name = 'mask' if is_it_mask else 'landmark'
+            prompt = 'Generate face segmentation | ' if is_it_mask else 'Generate face landmark |'
+
+            def get_single_caption(captions):
+                if isinstance(captions, list):
+                    return random.choice(captions)
+                else:
+                    return captions
+
+            masks = [sample[column_name] for sample in batch]
+            captions = [prompt + get_single_caption(sample['captions_eng']) for sample in batch]
             # image = transforms.Resize(resolution, interpolation=transforms.InterpolationMode.BILINEAR)(image)
             # get crop coordinates
             # if random.random() < 0.3:

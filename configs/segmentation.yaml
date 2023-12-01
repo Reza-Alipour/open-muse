@@ -2,14 +2,14 @@ wandb:
   entity: r-ap
 
 experiment:
-  name: "muse-seg"
-  project: "face-segmentation"
+  name: "muse-seg-en"
+  project: "face"
   output_dir: "output/"
   max_train_examples: 28500
   max_eval_examples: 1000
   save_every: 1000
-  eval_every: 200
-  generate_every: 100
+  eval_every: 250
+  generate_every: 50
   log_every: 50
   log_grad_norm_every: 1000
   resume_from_checkpoint: latest
@@ -19,7 +19,7 @@ experiment:
 model:
   vq_model:
     type: "vqgan"
-    pretrained: "reza-alipour/vqgan-segmentation"
+#    pretrained: "reza-alipour/vqgan-segmentation"
 
   text_encoder:
     type: "clip"
@@ -66,7 +66,7 @@ model:
   architecture: "uvit"
   gradient_checkpointing: True
   enable_xformers_memory_efficient_attention: True
-  pretrained_model_path: "reza-alipour/open-muse-seg256-fp16"
+#  pretrained_model_path: "reza-alipour/open-muse-seg256-fp16"
 
 
 dataset:
@@ -75,7 +75,7 @@ dataset:
         resolution: 256
 
 optimizer:
-  name: adafactor
+  name: adamw
   params: # default adamw params
     learning_rate: 5e-5
     scale_lr: False # scale learning rate by total batch size
@@ -98,7 +98,7 @@ training:
   use_ema: True
   ema_decay: 0.9999
   ema_update_after_step: 0
-  ema_update_every: 1
+  ema_update_every: 5
   seed: 1337
   max_train_steps: 4000
   overfit_one_batch: False
@@ -107,7 +107,7 @@ training:
   label_smoothing: 0.1
   max_grad_norm: null
   guidance_scale: 8
-  generation_timesteps: 18
+  generation_timesteps: 16
   # related to vae code sampling
   use_soft_code_target: False
   use_stochastic_code: False

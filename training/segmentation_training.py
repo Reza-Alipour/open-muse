@@ -678,8 +678,8 @@ def main():
             #     if config.model.transformer.get("add_cond_embeds", False)
             #     else CLIPTextModel
             # )
-            text_encoder = pt_multilingual_clip.MultilingualCLIP.from_pretrained(config.model.text_encoder.pretrained)
-            tokenizer = CLIPTokenizer.from_pretrained(config.model.text_encoder.pretrained)
+            text_encoder = RobertaSeriesModelWithTransformation.from_pretrained('BAAI/AltDiffusion-m9', subfolder='text_encoder')
+            tokenizer = XLMRobertaTokenizer.from_pretrained('BAAI/AltDiffusion-m9', subfolder='tokenizer')
             if config.model.text_encoder.get("pad_token_id", None):
                 tokenizer.pad_token_id = config.model.text_encoder.pad_token_id
         elif config.model.text_encoder.type == "t5":
@@ -701,7 +701,7 @@ def main():
 
     model_cls = MaskGitTransformer if config.model.get("architecture", "transformer") == "transformer" else MaskGiTUViT
     if config.model.get("pretrained_model_path", None) is not None:
-        model = model_cls.from_pretrained('R-AP/open-muse-seg256')
+        model = model_cls.from_pretrained('openMUSE/muse-256',subfolder='transformer')
     else:
         model = model_cls(**config.model.transformer)
     mask_id = model.config.mask_token_id

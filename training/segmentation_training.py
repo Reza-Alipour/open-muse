@@ -37,7 +37,6 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.optim import AdamW  # why is shampoo not available in PT :(
 from transformers import Adafactor, AutoTokenizer, XLMRobertaTokenizer
 from transformers import (
-    CLIPTokenizer,
     T5EncoderModel,
     T5Tokenizer,
 )
@@ -57,6 +56,8 @@ from muse import (
 )
 from muse.lr_schedulers import get_scheduler
 from optimizer import Lion
+from training.text_encoder import MultilingualCLIP
+
 try:
     import apex
 
@@ -67,6 +68,7 @@ except ImportError:
 logger = get_logger(__name__, log_level="INFO")
 hf_read_token = os.getenv('HF_READ_TOKEN')
 hf_write_token = os.getenv('HF_WRITE_TOKEN')
+
 
 def get_config():
     cli_conf = OmegaConf.from_cli()
@@ -319,7 +321,9 @@ def generate_images(
     logger.info("Generating images...")
     model.eval()
     # fmt: off
-    captions = ["She is wearing earrings. She has pointy nose, arched eyebrows, high cheekbones, straight hair, big lips, mouth slightly open, and blond hair."]
+    captions = [
+        "She is wearing earrings. She has pointy nose, arched eyebrows, high cheekbones, straight hair, big lips, mouth slightly open, and blond hair."
+    ]
     # fmt: on
 
     # read validation prompts from file
@@ -328,8 +332,8 @@ def generate_images(
 
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":
-            text_encoder = RobertaSeriesModelWithTransformation.from_pretrained('BAAI/AltDiffusion-m9', subfolder='text_encoder')
-            tokenizer = XLMRobertaTokenizer.from_pretrained('BAAI/AltDiffusion-m9', subfolder='tokenizer')
+            text_encoder = MultilingualCLIP.from_pretrained('M-CLIP/LABSE-Vit-L-14')
+            tokenizer = AutoTokenizer.from_pretrained('M-CLIP/LABSE-Vit-L-14')
         elif config.model.text_encoder.type == "t5":
             text_encoder = T5EncoderModel.from_pretrained(config.model.text_encoder.pretrained)
             tokenizer = T5Tokenizer.from_pretrained(config.model.text_encoder.pretrained)
@@ -346,21 +350,24 @@ def generate_images(
 
         text_encoder.to(device=accelerator.device, dtype=weight_dtype)
         vq_model.to(accelerator.device)
-
-    input_ids = tokenizer(
+    tokenized_inputs = tokenizer(
         validation_prompts,
         return_tensors="pt",
         padding="max_length",
         truncation=True,
         max_length=config.dataset.preprocessing.max_seq_length,
-    ).input_ids
+    )
+    input_ids = tokenized_inputs.input_ids
+    attention_masks = tokenized_inputs.attention_mask
 
     if config.model.transformer.get("add_cond_embeds", False):
-        outputs = text_encoder(input_ids.to(accelerator.device), return_dict=True, output_hidden_states=True)
+        outputs = text_encoder(input_ids.to(accelerator.device), attention_mask=attention_masks.to(accelerator.device),
+                               return_dict=True, output_hidden_states=True)
         encoder_hidden_states = outputs.hidden_states[-2]
         clip_embeds = outputs[0]
     else:
-        encoder_hidden_states = text_encoder(input_ids.to(accelerator.device)).last_hidden_state
+        encoder_hidden_states = text_encoder(input_ids.to(accelerator.device),
+                                             attention_mask=attention_masks.to(accelerator.device)).last_hidden_state
         clip_embeds = None
 
     if config.model.transformer.get("add_micro_cond_embeds", False):
@@ -678,8 +685,8 @@ def main():
             #     if config.model.transformer.get("add_cond_embeds", False)
             #     else CLIPTextModel
             # )
-            text_encoder = RobertaSeriesModelWithTransformation.from_pretrained('BAAI/AltDiffusion-m9', subfolder='text_encoder')
-            tokenizer = XLMRobertaTokenizer.from_pretrained('BAAI/AltDiffusion-m9', subfolder='tokenizer')
+            text_encoder = MultilingualCLIP.from_pretrained('M-CLIP/LABSE-Vit-L-14')
+            tokenizer = AutoTokenizer.from_pretrained('M-CLIP/LABSE-Vit-L-14')
             if config.model.text_encoder.get("pad_token_id", None):
                 tokenizer.pad_token_id = config.model.text_encoder.pad_token_id
         elif config.model.text_encoder.type == "t5":
@@ -701,7 +708,7 @@ def main():
 
     model_cls = MaskGitTransformer if config.model.get("architecture", "transformer") == "transformer" else MaskGiTUViT
     if config.model.get("pretrained_model_path", None) is not None:
-        model = model_cls.from_pretrained('openMUSE/muse-256',subfolder='transformer')
+        model = model_cls.from_pretrained('openMUSE/muse-256', subfolder='transformer')
     else:
         model = model_cls(**config.model.transformer)
     mask_id = model.config.mask_token_id
@@ -852,8 +859,10 @@ def main():
         ema.to(accelerator.device)
 
     if not is_pre_encode and config.model.transformer.get("use_empty_embeds_for_uncond", False):
-        empty_input = tokenizer("", padding="max_length", return_tensors="pt",max_length=77).input_ids.to(accelerator.device)
-        outputs = text_encoder(empty_input, output_hidden_states=True)
+        tokenized_empty_inputs = tokenizer("", padding="max_length", return_tensors="pt", max_length=77)
+        empty_input = tokenized_empty_inputs.input_ids.to(accelerator.device)
+        attentions = tokenized_empty_inputs.attention_mask.to(accelerator.device)
+        outputs = text_encoder(empty_input, attention_mask=attentions, output_hidden_states=True)
         if config.model.transformer.get("add_cond_embeds", False):
             empty_embeds = outputs.hidden_states[-2]
             empty_clip_embeds = outputs[0]
@@ -932,6 +941,7 @@ def main():
             min_masking_rate: float = 0.0,
             batch: Any = None,
             is_train: bool = True,
+            attention=None
     ):
         if is_pre_encode:
             image_tokens = pixel_values_or_image_ids
@@ -961,11 +971,12 @@ def main():
 
         if not is_pre_encode:
             if config.model.transformer.get("add_cond_embeds", False):
-                outputs = text_encoder(text_input_ids_or_embeds, return_dict=True, output_hidden_states=True)
+                outputs = text_encoder(text_input_ids_or_embeds, attention_mask=attention, return_dict=True,
+                                       output_hidden_states=True)
                 encoder_hidden_states = outputs.hidden_states[-2]
                 clip_embeds = outputs[0]
             else:
-                encoder_hidden_states = text_encoder(text_input_ids_or_embeds)[0]
+                encoder_hidden_states = text_encoder(text_input_ids_or_embeds, attention_mask=attention)[0]
                 clip_embeds = None
 
             if config.model.transformer.get("add_micro_cond_embeds", False):
@@ -1009,16 +1020,19 @@ def main():
             if i % 100 == 0:
                 accelerator.print(f'Epoch {epoch} | Batch {i}')
             pixel_values, captions = batch['masks'], batch['captions']
-            input_ids = tokenizer(
+            tokenized = tokenizer(
                 captions,
                 max_length=config.dataset.preprocessing.max_seq_length,
                 padding="max_length",
                 truncation=True,
                 return_tensors="pt"
-            ).input_ids
+            )
+            input_ids = tokenized.input_ids
+            attentions = tokenized.attention_mask
 
             pixel_values = pixel_values.to(accelerator.device, non_blocking=True)
             input_ids = input_ids.to(accelerator.device, non_blocking=True)
+            attentions = attentions.to(accelerator.device, non_blocking=True)
             data_time_m.update(time.time() - end)
 
             # encode images to image tokens, mask them and create input and labels
@@ -1031,7 +1045,8 @@ def main():
                 loss_weight,
                 clip_embeds,
                 micro_conds,
-            ) = prepare_inputs_and_labels(pixel_values, input_ids, config.training.min_masking_rate, batch=batch)
+            ) = prepare_inputs_and_labels(pixel_values, input_ids, config.training.min_masking_rate,
+                                          attention=attentions, batch=batch)
 
             # log the inputs for the first step of the first epoch
             if global_step == 0 and epoch == 0:

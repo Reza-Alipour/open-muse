@@ -32,7 +32,6 @@ from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
-from diffusers.pipelines.alt_diffusion import RobertaSeriesModelWithTransformation
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.optim import AdamW  # why is shampoo not available in PT :(
 from transformers import Adafactor, AutoTokenizer, XLMRobertaTokenizer

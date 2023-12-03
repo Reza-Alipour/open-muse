@@ -32,12 +32,11 @@ from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
+from diffusers.pipelines.alt_diffusion import RobertaSeriesModelWithTransformation
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.optim import AdamW  # why is shampoo not available in PT :(
-from transformers import Adafactor
+from transformers import Adafactor, AutoTokenizer, XLMRobertaTokenizer
 from transformers import (
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
     CLIPTokenizer,
     T5EncoderModel,
     T5Tokenizer,
@@ -58,7 +57,6 @@ from muse import (
 )
 from muse.lr_schedulers import get_scheduler
 from optimizer import Lion
-
 try:
     import apex
 
@@ -330,8 +328,8 @@ def generate_images(
 
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":
-            text_encoder = CLIPTextModel.from_pretrained(config.model.text_encoder.pretrained)
-            tokenizer = CLIPTokenizer.from_pretrained(config.model.text_encoder.pretrained)
+            text_encoder = RobertaSeriesModelWithTransformation.from_pretrained('BAAI/AltDiffusion-m9', subfolder='text_encoder')
+            tokenizer = XLMRobertaTokenizer.from_pretrained('BAAI/AltDiffusion-m9', subfolder='tokenizer')
         elif config.model.text_encoder.type == "t5":
             text_encoder = T5EncoderModel.from_pretrained(config.model.text_encoder.pretrained)
             tokenizer = T5Tokenizer.from_pretrained(config.model.text_encoder.pretrained)
@@ -675,12 +673,12 @@ def main():
     is_pre_encode = config.training.get("pre_encode", False)
     if not is_pre_encode:
         if config.model.text_encoder.type == "clip":
-            text_encoder_cls = (
-                CLIPTextModelWithProjection
-                if config.model.transformer.get("add_cond_embeds", False)
-                else CLIPTextModel
-            )
-            text_encoder = text_encoder_cls.from_pretrained(config.model.text_encoder.pretrained, projection_dim=768)
+            # text_encoder_cls = (
+            #     CLIPTextModelWithProjection
+            #     if config.model.transformer.get("add_cond_embeds", False)
+            #     else CLIPTextModel
+            # )
+            text_encoder = pt_multilingual_clip.MultilingualCLIP.from_pretrained(config.model.text_encoder.pretrained)
             tokenizer = CLIPTokenizer.from_pretrained(config.model.text_encoder.pretrained)
             if config.model.text_encoder.get("pad_token_id", None):
                 tokenizer.pad_token_id = config.model.text_encoder.pad_token_id

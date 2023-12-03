@@ -678,14 +678,19 @@ class SegmentationDataset:
             column_name = 'mask' if is_it_mask else 'landmark'
             prompt = 'Generate face segmentation | ' if is_it_mask else 'Generate face landmark |'
 
-            def get_single_caption(captions):
-                if isinstance(captions, list):
-                    return random.choice(captions)
+            def get_single_caption(c1, c2):
+                if random.randint(0,2) == 0:
+                    if isinstance(c1, list):
+                        return random.choice(c1)
+                    else:
+                        return c1
+                if isinstance(c2, list):
+                    return random.choice(c2)
                 else:
-                    return captions
+                    return c2
 
             masks = [sample[column_name] for sample in batch]
-            captions = [prompt + get_single_caption(sample['captions_eng']) for sample in batch]
+            captions = [prompt + get_single_caption(sample['captions'],sample['captions_all']) for sample in batch]
             # image = transforms.Resize(resolution, interpolation=transforms.InterpolationMode.BILINEAR)(image)
             # get crop coordinates
             # if random.random() < 0.3:

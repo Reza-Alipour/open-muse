@@ -262,15 +262,17 @@ def validate_model(
 
     for i, batch in enumerate(eval_dataloader):
         pixel_values, captions = batch['masks'], batch['captions']
-        input_ids = tokenizer(
+        tokenized = tokenizer(
             captions,
             max_length=max_seq_length,
             padding="max_length",
             truncation=True,
             return_tensors="pt"
-        ).input_ids
+        )
+        input_ids = tokenized.input_ids
         pixel_values = pixel_values.to(accelerator.device, non_blocking=True)
         input_ids = input_ids.to(accelerator.device, non_blocking=True)
+        attention = tokenized.attention_mask.to(accelerator.device, non_blocking=True)
         (
             input_ids,
             encoder_hidden_states,
@@ -280,7 +282,7 @@ def validate_model(
             loss_weight,
             clip_embeds,
             micro_conds,
-        ) = prepare_inputs_and_labels(pixel_values, input_ids, batch=batch, is_train=False)
+        ) = prepare_inputs_and_labels(pixel_values, input_ids, batch=batch, is_train=False, attention=attention)
         _, loss = model(
             input_ids=input_ids,
             encoder_hidden_states=encoder_hidden_states,
@@ -695,7 +697,7 @@ def main():
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp1500', token=hf_read_token)
+        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp4500', token=hf_read_token)
 
         # Freeze the text model and VQGAN
         text_encoder.requires_grad_(False)

@@ -325,8 +325,7 @@ def generate_images(
     # fmt: on
 
     # read validation prompts from file
-    validation_prompts = [f'Generate face segmentation | {c}' for c in captions] + [f'Generate face landmark | {c}' for
-                                                                                    c in captions]
+    validation_prompts = [f'Generate face segmentation | {c}' for c in captions]
 
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":

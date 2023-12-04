@@ -75,7 +75,7 @@ dataset:
         resolution: 256
 
 optimizer:
-  name: adamw
+  name: adafactor
   params: # default adamw params
     learning_rate: 5e-5
     scale_lr: False # scale learning rate by total batch size

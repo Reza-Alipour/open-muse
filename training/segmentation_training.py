@@ -338,7 +338,7 @@ def generate_images(
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp1500', token=hf_read_token)
+        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp4500', token=hf_read_token)
         weight_dtype = torch.float32
         if accelerator.mixed_precision == "fp16":
             weight_dtype = torch.float16

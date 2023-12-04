@@ -1023,8 +1023,8 @@ def main():
             pixel_values = pixel_values.to(accelerator.device, non_blocking=True)
             input_ids = input_ids.to(accelerator.device, non_blocking=True)
             data_time_m.update(time.time() - end)
-            text_encoder.to(accelerator.device, non_blocking=True)
-            vq_model.to(accelerator.device, non_blocking=True)
+            text_encoder = text_encoder.to(accelerator.device, non_blocking=True)
+            vq_model = vq_model.to(accelerator.device, non_blocking=True)
             # encode images to image tokens, mask them and create input and labels
             (
                 input_ids,
@@ -1036,8 +1036,9 @@ def main():
                 clip_embeds,
                 micro_conds,
             ) = prepare_inputs_and_labels(pixel_values, input_ids, config.training.min_masking_rate, batch=batch)
-            text_encoder.to('cpu')
-            vq_model.to('cpu')
+            text_encoder = text_encoder.to('cpu')
+            vq_model = vq_model.to('cpu')
+            print('TEMP')
             torch.cuda.empty_cache()
             # log the inputs for the first step of the first epoch
             if global_step == 0 and epoch == 0:

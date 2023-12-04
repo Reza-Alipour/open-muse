@@ -776,10 +776,12 @@ def main():
         {
             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": optimizer_config.weight_decay,
+            "lr": optimizer_config.learning_rate
         },
         {
             "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
             "weight_decay": 0.0,
+            "lr": optimizer_config.learning_rate
         },
     ]
 

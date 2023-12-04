@@ -341,7 +341,7 @@ def generate_images(
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp4500', token=hf_read_token)
+        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp3000', token=hf_read_token)
         weight_dtype = torch.float32
         if accelerator.mixed_precision == "fp16":
             weight_dtype = torch.float16
@@ -693,7 +693,7 @@ def main():
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp4500', token=hf_read_token)
+        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp3000', token=hf_read_token)
 
         # Freeze the text model and VQGAN
         text_encoder.requires_grad_(False)
@@ -705,7 +705,7 @@ def main():
 
     model_cls = MaskGitTransformer if config.model.get("architecture", "transformer") == "transformer" else MaskGiTUViT
     if config.model.get("pretrained_model_path", None) is not None:
-        model = model_cls.from_pretrained('reza-alipour/mb', revision='segment',token=hf_read_token)
+        model = model_cls.from_pretrained('openMUSE/muse-256', subfolder='transformer')
     else:
         model = model_cls(**config.model.transformer)
     mask_id = model.config.mask_token_id

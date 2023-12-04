@@ -508,7 +508,7 @@ def save_checkpoint(model, config, accelerator, global_step):
             save_function=accelerator.save,
             state_dict=state_dict,
         )
-        model.half().save_pretrained(save_path / "unwrapped_model_fp16")
+        # model.half().save_pretrained(save_path / "unwrapped_model_fp16")
         json.dump({"global_step": global_step}, (save_path / "metadata.json").open("w+"))
         logger.info(f"Saved state to {save_path}")
 

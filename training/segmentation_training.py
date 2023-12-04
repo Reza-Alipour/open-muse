@@ -321,11 +321,14 @@ def generate_images(
     logger.info("Generating images...")
     model.eval()
     # fmt: off
-    captions = ["She is wearing earrings. She has pointy nose, arched eyebrows, high cheekbones, straight hair, big lips, mouth slightly open, and blond hair."]
+    captions = [
+        "She is wearing earrings. She has pointy nose, arched eyebrows, high cheekbones, straight hair, big lips, mouth slightly open, and blond hair.",
+        "He has big nose, long forehead and he wears glasses."
+    ]
     # fmt: on
 
     # read validation prompts from file
-    validation_prompts = [f'Generate face segmentation | {c}' for c in captions]
+    validation_prompts = [f'Face Segmentation | {c}' for c in captions]
 
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":

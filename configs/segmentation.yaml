@@ -2,19 +2,19 @@ wandb:
   entity: r-ap
 
 experiment:
-  name: "muse-seg-en"
-  project: "face"
+  name: "muse_en"
+  project: "muse_en"
   output_dir: "output/"
   max_train_examples: 28500
   max_eval_examples: 1000
   save_every: 1000
-  eval_every: 250
-  generate_every: 50
-  log_every: 50
-  log_grad_norm_every: 1000
+  eval_every: 500
+  generate_every: 100
+  log_every: 100
+  log_grad_norm_every: 10000
   resume_from_checkpoint: latest
   resume_lr_scheduler: True
-  checkpoints_total_limit: 2
+  checkpoints_total_limit: 1
 
 model:
   vq_model:
@@ -45,7 +45,7 @@ model:
     add_cross_attention: True
     project_encoder_hidden_states: True
     codebook_size: 8192
-    num_vq_tokens: 1024
+    num_vq_tokens: 256
     initializer_range: 0.02
     norm_type: "rmsnorm"
     layer_norm_eps: 1e-6
@@ -91,8 +91,8 @@ lr_scheduler:
     warmup_steps: 100
 
 training:
-  gradient_accumulation_steps: 8
-  batch_size: 6
+  gradient_accumulation_steps: 1
+  batch_size: 1
   mixed_precision: "no"
   enable_tf32: True
   use_ema: True

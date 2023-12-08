@@ -427,21 +427,24 @@ class PipelineMuseInpainting(PipelineMuse):
         else:
             if isinstance(text, str):
                 text = [text]
-
-            input_ids = self.tokenizer(
+            tokenized_text = self.tokenizer(
                 text,
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
                 max_length=self.tokenizer.model_max_length,
-            ).input_ids  # TODO: remove hardcode
+            )
+            input_ids = tokenized_text.input_ids  # TODO: remove hardcode
+            attention_mask = tokenized_text.attention_mask
             input_ids = input_ids.to(self.device)
+            attention_mask = attention_mask.to(self.device)
 
             if self.transformer.config.add_cond_embeds:
-                outputs = self.text_encoder(input_ids, return_dict=True, output_hidden_states=True)
+                outputs = self.text_encoder(input_ids, attention_mask=attention_mask, return_dict=True,
+                                            output_hidden_states=True)
                 pooled_embeds, encoder_hidden_states = outputs.text_embeds, outputs.hidden_states[-2]
             else:
-                encoder_hidden_states = self.text_encoder(input_ids).last_hidden_state
+                encoder_hidden_states = self.text_encoder(input_ids, attention_mask=attention_mask).last_hidden_state
                 pooled_embeds = None
 
             if negative_text is not None:

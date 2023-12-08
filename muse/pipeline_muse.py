@@ -17,11 +17,9 @@ from typing import List, Optional, Union, Tuple
 
 import numpy as np
 import torch
-from torchvision import transforms
 from PIL import Image
 from transformers import (
     AutoTokenizer,
-    CLIPConfig,
     CLIPTextModel,
     CLIPTextModelWithProjection,
     PreTrainedTokenizer,
@@ -38,12 +36,12 @@ from .sampling import get_mask_chedule
 
 class PipelineMuse:
     def __init__(
-        self,
-        vae: Union[VQGANModel, MOVQ, MaskGitVQGAN],
-        transformer: Union[MaskGitTransformer, MaskGiTUViT],
-        is_class_conditioned: bool = False,
-        text_encoder: Optional[Union[T5EncoderModel, CLIPTextModel]] = None,
-        tokenizer: Optional[PreTrainedTokenizer] = None,
+            self,
+            vae: Union[VQGANModel, MOVQ, MaskGitVQGAN],
+            transformer: Union[MaskGitTransformer, MaskGiTUViT],
+            is_class_conditioned: bool = False,
+            text_encoder: Optional[Union[T5EncoderModel, CLIPTextModel]] = None,
+            tokenizer: Optional[PreTrainedTokenizer] = None,
     ) -> None:
         self.text_encoder = text_encoder
         self.tokenizer = tokenizer
@@ -55,50 +53,50 @@ class PipelineMuse:
     def to(self, device="cpu", dtype=torch.float32) -> None:
         self.device = device
         self.dtype = dtype
-        
+
         if not self.is_class_conditioned:
             self.text_encoder.to(device, dtype=dtype)
         self.transformer.to(device, dtype=dtype)
-        self.vae.to(device, dtype=torch.float32) # keep vae in fp32
+        self.vae.to(device, dtype=torch.float32)  # keep vae in fp32
 
         return self
 
     @torch.no_grad()
     def __call__(
-        self,
-        text: Optional[Union[str, List[str]]] = None,
-        negative_text: Optional[Union[str, List[str]]] = "",
-        prompt_embeds: Optional[torch.Tensor] = None,
-        pooled_embeds: Optional[torch.Tensor] = None,
-        negative_prompt_embeds: Optional[torch.Tensor] = None,
-        negative_pooled_embeds: Optional[torch.Tensor] = None,
-        class_ids: Optional[Union[int, List[int]]] = None,
-        timesteps: int = 16,
-        noise_schedule: str = "cosine",
-        guidance_scale: float = 10.0,
-        guidance_schedule=None,
-        temperature: Union[float, Tuple[float]] = (2, 0),
-        topk_filter_thres: float = 0.9,
-        num_images_per_prompt: int = 1,
-        use_maskgit_generate: bool = True,
-        generator: Optional[torch.Generator] = None,
-        use_fp16: bool = False,
-        noise_type="mask",  # can be "mask" or "random_replace"
-        predict_all_tokens=False,
-        orig_size=(512, 512),
-        crop_coords=(0, 0),
-        aesthetic_score=6.0,
-        return_intermediate: bool = False,
-        use_tqdm=True,
-        transformer_seq_len=None,
-        clip_skip:int = None,
+            self,
+            text: Optional[Union[str, List[str]]] = None,
+            negative_text: Optional[Union[str, List[str]]] = "",
+            prompt_embeds: Optional[torch.Tensor] = None,
+            pooled_embeds: Optional[torch.Tensor] = None,
+            negative_prompt_embeds: Optional[torch.Tensor] = None,
+            negative_pooled_embeds: Optional[torch.Tensor] = None,
+            class_ids: Optional[Union[int, List[int]]] = None,
+            timesteps: int = 16,
+            noise_schedule: str = "cosine",
+            guidance_scale: float = 10.0,
+            guidance_schedule=None,
+            temperature: Union[float, Tuple[float]] = (2, 0),
+            topk_filter_thres: float = 0.9,
+            num_images_per_prompt: int = 1,
+            use_maskgit_generate: bool = True,
+            generator: Optional[torch.Generator] = None,
+            use_fp16: bool = False,
+            noise_type="mask",  # can be "mask" or "random_replace"
+            predict_all_tokens=False,
+            orig_size=(512, 512),
+            crop_coords=(0, 0),
+            aesthetic_score=6.0,
+            return_intermediate: bool = False,
+            use_tqdm=True,
+            transformer_seq_len=None,
+            clip_skip: int = None,
     ):
         if text is None and class_ids is None:
             raise ValueError("Either text or class_ids must be provided.")
 
         if text is not None and class_ids is not None:
             raise ValueError("Only one of text or class_ids may be provided.")
-        
+
         if class_ids is not None:
             if isinstance(class_ids, int):
                 class_ids = [class_ids]
@@ -112,47 +110,53 @@ class PipelineMuse:
                 text = [text]
 
             if prompt_embeds is None:
-                input_ids = self.tokenizer(
+                tokenized_text = self.tokenizer(
                     text,
                     return_tensors="pt",
                     padding="max_length",
                     truncation=True,
                     max_length=self.tokenizer.model_max_length,
-                ).input_ids  # TODO: remove hardcode
+                )
+                input_ids = tokenized_text.input_ids  # TODO: remove hardcode
                 input_ids = input_ids.to(self.device)
-
+                attention_mask = tokenized_text.attention_mask.to(self.device)
             if self.transformer.config.add_cond_embeds:
                 if prompt_embeds is not None and pooled_embeds is not None:
                     pooled_embeds, encoder_hidden_states = pooled_embeds, prompt_embeds
                     pooled_embeds = pooled_embeds.to(self.device, dtype=self.text_encoder.dtype)
                     encoder_hidden_states = encoder_hidden_states.to(self.device, dtype=self.text_encoder.dtype)
                 else:
-                    clip_layer_idx = -(clip_skip+1)  if clip_skip is not None else -2
-                    outputs = self.text_encoder(input_ids, return_dict=True, output_hidden_states=True)
+                    clip_layer_idx = -(clip_skip + 1) if clip_skip is not None else -2
+                    outputs = self.text_encoder(input_ids, attention_mask=attention_mask, return_dict=True,
+                                                output_hidden_states=True)
                     pooled_embeds, encoder_hidden_states = outputs.text_embeds, outputs.hidden_states[clip_layer_idx]
             else:
-                encoder_hidden_states = self.text_encoder(input_ids).last_hidden_state
+                encoder_hidden_states = self.text_encoder(input_ids, attention_mask=attention_mask).last_hidden_state
                 pooled_embeds = None
 
             if negative_text is not None:
                 if isinstance(negative_text, str):
                     negative_text = [negative_text] * len(text)
 
-                negative_input_ids = self.tokenizer(
+                tokenized_text = self.tokenizer(
                     negative_text,
                     return_tensors="pt",
                     padding="max_length",
                     truncation=True,
                     max_length=self.tokenizer.model_max_length,
-                ).input_ids
+                )
+                negative_input_ids = tokenized_text.input_ids
                 negative_input_ids = negative_input_ids.to(self.device)
+                negative_attention_mask = tokenized_text.attention_mask.to(self.device)
 
                 if self.transformer.config.add_cond_embeds:
-                    outputs = self.text_encoder(negative_input_ids, return_dict=True, output_hidden_states=True)
+                    outputs = self.text_encoder(negative_input_ids, attention_mask=negative_attention_mask,
+                                                return_dict=True, output_hidden_states=True)
                     negative_pooled_embeds = outputs.text_embeds
                     negative_encoder_hidden_states = outputs.hidden_states[-2]
                 else:
-                    negative_encoder_hidden_states = self.text_encoder(negative_input_ids).last_hidden_state
+                    negative_encoder_hidden_states = self.text_encoder(negative_input_ids,
+                                                                       attention_mask=negative_attention_mask).last_hidden_state
                     negative_pooled_embeds = None
             elif negative_prompt_embeds is not None:
                 negative_encoder_hidden_states = negative_prompt_embeds.to(self.device, dtype=self.text_encoder.dtype)
@@ -181,10 +185,10 @@ class PipelineMuse:
                 )
 
             if negative_encoder_hidden_states is None:
-                empty_input = self.tokenizer("", padding="max_length", return_tensors="pt").input_ids.to(
-                    self.text_encoder.device
-                )
-                outputs = self.text_encoder(empty_input, output_hidden_states=True)
+                tokenized_text = self.tokenizer("", padding="max_length", return_tensors="pt")
+                empty_input = tokenized_text.input_ids.to(self.text_encoder.device)
+                attention_mask = tokenized_text.attention_mask.to(self.text_encoder.device)
+                outputs = self.text_encoder(empty_input, attention_mask=attention_mask, output_hidden_states=True)
                 empty_embeds = outputs.hidden_states[-2]
                 empty_cond_embeds = outputs[0]
             else:
@@ -254,15 +258,15 @@ class PipelineMuse:
 
     @classmethod
     def from_pretrained(
-        cls,
-        model_name_or_path: str = None,
-        text_encoder_path: Optional[str] = None,
-        vae_path: Optional[str] = None,
-        transformer_path: Optional[str] = None,
-        vae = None,
-        text_encoder = None,
-        transformer = None,
-        is_class_conditioned: bool = False,
+            cls,
+            model_name_or_path: str = None,
+            text_encoder_path: Optional[str] = None,
+            vae_path: Optional[str] = None,
+            transformer_path: Optional[str] = None,
+            vae=None,
+            text_encoder=None,
+            transformer=None,
+            is_class_conditioned: bool = False,
     ) -> None:
         """
         Instantiate a PipelineMuse from a pretrained model. Either model_name_or_path or all of text_encoder_path, vae_path, and
@@ -319,7 +323,8 @@ class PipelineMuse:
             ...
         elif transformer_config["_class_name"] == "MaskGitTransformer":
             transformer = MaskGitTransformer.from_pretrained(**transformer_args)
-        elif transformer_config["_class_name"] == "MaskGiTUViT" or transformer_config["_class_name"] == "MaskGiTUViT_v2":
+        elif transformer_config["_class_name"] == "MaskGiTUViT" or transformer_config[
+            "_class_name"] == "MaskGiTUViT_v2":
             transformer = MaskGiTUViT.from_pretrained(**transformer_args)
         else:
             raise ValueError(f"Unknown Transformer class: {transformer_config['_class_name']}")
@@ -338,7 +343,7 @@ class PipelineMuse:
             vae = PaellaVQModel.from_pretrained(**vae_args)
         else:
             raise ValueError(f"Unknown VAE class: {vae_config['_class_name']}")
-        
+
         if is_class_conditioned:
             return cls(
                 vae=vae,
@@ -355,8 +360,8 @@ class PipelineMuse:
         )
 
     def save_pretrained(
-        self,
-        save_directory: Union[str, os.PathLike],
+            self,
+            save_directory: Union[str, os.PathLike],
     ) -> None:
         """
         Save the pipeline's model and tokenizer to the specified directory.
@@ -373,25 +378,25 @@ class PipelineMuse:
 class PipelineMuseInpainting(PipelineMuse):
     @torch.no_grad()
     def __call__(
-        self,
-        image: Image,
-        mask: torch.BoolTensor,
-        text: Optional[Union[str, List[str]]] = None,
-        negative_text: Optional[Union[str, List[str]]] = None,
-        class_ids: torch.LongTensor = None,
-        timesteps: int = 8,
-        guidance_scale: float = 8.0,
-        guidance_schedule=None,
-        temperature: float = 1.0,
-        topk_filter_thres: float = 0.9,
-        num_images_per_prompt: int = 1,
-        use_maskgit_generate: bool = True,
-        generator: Optional[torch.Generator] = None,
-        use_fp16: bool = False,
-        image_size: int = 256,
-        orig_size=(256, 256),
-        crop_coords=(0, 0),
-        aesthetic_score=6.0,
+            self,
+            image: Image,
+            mask: torch.BoolTensor,
+            text: Optional[Union[str, List[str]]] = None,
+            negative_text: Optional[Union[str, List[str]]] = None,
+            class_ids: torch.LongTensor = None,
+            timesteps: int = 8,
+            guidance_scale: float = 8.0,
+            guidance_schedule=None,
+            temperature: float = 1.0,
+            topk_filter_thres: float = 0.9,
+            num_images_per_prompt: int = 1,
+            use_maskgit_generate: bool = True,
+            generator: Optional[torch.Generator] = None,
+            use_fp16: bool = False,
+            image_size: int = 256,
+            orig_size=(256, 256),
+            crop_coords=(0, 0),
+            aesthetic_score=6.0,
     ):
         from torchvision import transforms
 
@@ -450,16 +455,19 @@ class PipelineMuseInpainting(PipelineMuse):
             if negative_text is not None:
                 if isinstance(negative_text, str):
                     negative_text = [negative_text]
-
-                negative_input_ids = self.tokenizer(
+                tokenized_text = self.tokenizer(
                     negative_text,
                     return_tensors="pt",
                     padding="max_length",
                     truncation=True,
                     max_length=self.tokenizer.model_max_length,
-                ).input_ids
+                )
+                negative_input_ids = tokenized_text.input_ids
+                attention_mask = tokenized_text.attention_mask
                 negative_input_ids = negative_input_ids.to(self.device)
-                negative_encoder_hidden_states = self.text_encoder(negative_input_ids).last_hidden_state
+                attention_mask = attention_mask.to(self.device)
+                negative_encoder_hidden_states = self.text_encoder(negative_input_ids,
+                                                                   attention_mask=attention_mask).last_hidden_state
             else:
                 negative_encoder_hidden_states = None
 
@@ -474,10 +482,10 @@ class PipelineMuseInpainting(PipelineMuse):
                     bs_embed * num_images_per_prompt, seq_len, -1
                 )
 
-            empty_input = self.tokenizer("", padding="max_length", return_tensors="pt").input_ids.to(
-                self.text_encoder.device
-            )
-            outputs = self.text_encoder(empty_input, output_hidden_states=True)
+            tokenized_text = self.tokenizer("", padding="max_length", return_tensors="pt")
+            empty_input = tokenized_text.input_ids.to(self.text_encoder.device)
+            attention_mask = tokenized_text.attention_mask.to(self.text_encoder.device)
+            outputs = self.text_encoder(empty_input, attention_mask=attention_mask, output_hidden_states=True)
             empty_embeds = outputs.hidden_states[-2]
             empty_cond_embeds = outputs[0]
 
@@ -506,144 +514,6 @@ class PipelineMuseInpainting(PipelineMuse):
                 temperature=temperature,
                 topk_filter_thres=topk_filter_thres,
                 generator=generator,
-            )
-        images = self.vae.decode_code(generated_tokens)
-
-        # Convert to PIL images
-        images = [self.to_pil_image(image) for image in images]
-        return images
-
-
-class PipelineMuseEditing(PipelineMuse):
-    @torch.no_grad()
-    def __call__(
-        self,
-        image: Image,
-        text: Optional[Union[str, List[str]]] = None,
-        negative_text: Optional[Union[str, List[str]]] = None,
-        class_ids: torch.LongTensor = None,
-        timesteps: int = 8,
-        guidance_scale: float = 8.0,
-        guidance_schedule=None,
-        temperature: float = 1.0,
-        topk_filter_thres: float = 0.9,
-        num_images_per_prompt: int = 1,
-        use_maskgit_generate: bool = True,
-        generator: Optional[torch.Generator] = None,
-        use_fp16: bool = False,
-        image_size: int = 256,
-        orig_size=(256, 256),
-        crop_coords=(0, 0),
-        aesthetic_score=6.0,
-        min_masking_len: Optional[Union[int, Tuple[int, int]]] = None,
-    ):
-        assert use_maskgit_generate
-        if text is None and class_ids is None:
-            raise ValueError("Either text or class_ids must be provided.")
-
-        if text is not None and class_ids is not None:
-            raise ValueError("Only one of text or class_ids may be provided.")
-
-        encode_transform = transforms.Compose(
-            [
-                transforms.Resize(image_size, interpolation=transforms.InterpolationMode.BILINEAR),
-                transforms.CenterCrop(image_size),
-                transforms.ToTensor(),
-            ]
-        )
-        pixel_values = encode_transform(image).unsqueeze(0).to(self.device)
-        _, image_tokens = self.vae.encode(pixel_values)
-
-        image_tokens = image_tokens.repeat(num_images_per_prompt, 1)
-        if class_ids is not None:
-            if isinstance(class_ids, int):
-                class_ids = [class_ids]
-
-            class_ids = torch.tensor(class_ids, device=self.device, dtype=torch.long)
-            # duplicate class ids for each generation per prompt
-            class_ids = class_ids.repeat_interleave(num_images_per_prompt, dim=0)
-            model_inputs = {"class_ids": class_ids}
-        else:
-            if isinstance(text, str):
-                text = [text]
-
-            input_ids = self.tokenizer(
-                text,
-                return_tensors="pt",
-                padding="max_length",
-                truncation=True,
-                max_length=self.tokenizer.model_max_length,
-            ).input_ids  # TODO: remove hardcode
-            input_ids = input_ids.to(self.device)
-
-            if self.transformer.config.add_cond_embeds:
-                outputs = self.text_encoder(input_ids, return_dict=True, output_hidden_states=True)
-                pooled_embeds, encoder_hidden_states = outputs.text_embeds, outputs.hidden_states[-2]
-            else:
-                encoder_hidden_states = self.text_encoder(input_ids).last_hidden_state
-                pooled_embeds = None
-
-            if negative_text is not None:
-                if isinstance(negative_text, str):
-                    negative_text = [negative_text]
-
-                negative_input_ids = self.tokenizer(
-                    negative_text,
-                    return_tensors="pt",
-                    padding="max_length",
-                    truncation=True,
-                    max_length=self.tokenizer.model_max_length,
-                ).input_ids
-                negative_input_ids = negative_input_ids.to(self.device)
-                negative_encoder_hidden_states = self.text_encoder(negative_input_ids).last_hidden_state
-            else:
-                negative_encoder_hidden_states = None
-
-            # duplicate text embeddings for each generation per prompt, using mps friendly method
-            bs_embed, seq_len, _ = encoder_hidden_states.shape
-            encoder_hidden_states = encoder_hidden_states.repeat(1, num_images_per_prompt, 1)
-            encoder_hidden_states = encoder_hidden_states.view(bs_embed * num_images_per_prompt, seq_len, -1)
-            if negative_encoder_hidden_states is not None:
-                bs_embed, seq_len, _ = negative_encoder_hidden_states.shape
-                negative_encoder_hidden_states = negative_encoder_hidden_states.repeat(1, num_images_per_prompt, 1)
-                negative_encoder_hidden_states = negative_encoder_hidden_states.view(
-                    bs_embed * num_images_per_prompt, seq_len, -1
-                )
-
-            empty_input = self.tokenizer("", padding="max_length", return_tensors="pt").input_ids.to(
-                self.text_encoder.device
-            )
-            outputs = self.text_encoder(empty_input, output_hidden_states=True)
-            empty_embeds = outputs.hidden_states[-2]
-            empty_cond_embeds = outputs[0]
-
-            model_inputs = {
-                "encoder_hidden_states": encoder_hidden_states,
-                "negative_embeds": negative_encoder_hidden_states,
-                "empty_embeds": empty_embeds,
-                "empty_cond_embeds": empty_cond_embeds,
-                "cond_embeds": pooled_embeds,
-            }
-
-        if self.transformer.config.add_micro_cond_embeds:
-            micro_conds = list(orig_size) + list(crop_coords) + [aesthetic_score]
-            micro_conds = torch.tensor(micro_conds, device=self.device, dtype=encoder_hidden_states.dtype)
-            micro_conds = micro_conds.unsqueeze(0)
-            model_inputs["micro_conds"] = micro_conds
-
-        generate = self.transformer.generate2
-        with torch.autocast("cuda", enabled=use_fp16):
-            generated_tokens = generate(
-                input_ids=image_tokens,
-                **model_inputs,
-                timesteps=timesteps,
-                guidance_scale=guidance_scale,
-                guidance_schedule=guidance_schedule,
-                temperature=temperature,
-                topk_filter_thres=topk_filter_thres,
-                generator=generator,
-                use_tqdm=True,
-                min_masking_len=min_masking_len
             )
         images = self.vae.decode_code(generated_tokens)
 

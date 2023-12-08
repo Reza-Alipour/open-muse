@@ -127,10 +127,12 @@ class PipelineMuse:
                     encoder_hidden_states = encoder_hidden_states.to(self.device, dtype=self.text_encoder.dtype)
                 else:
                     clip_layer_idx = -(clip_skip + 1) if clip_skip is not None else -2
+                    print(attention_mask.shape)
                     outputs = self.text_encoder(input_ids, attention_mask=attention_mask, return_dict=True,
                                                 output_hidden_states=True)
                     pooled_embeds, encoder_hidden_states = outputs.text_embeds, outputs.hidden_states[clip_layer_idx]
             else:
+                print(attention_mask.shape)
                 encoder_hidden_states = self.text_encoder(input_ids, attention_mask=attention_mask).last_hidden_state
                 pooled_embeds = None
 
@@ -150,11 +152,13 @@ class PipelineMuse:
                 negative_attention_mask = tokenized_text.attention_mask.to(self.device)
 
                 if self.transformer.config.add_cond_embeds:
+                    print(negative_attention_mask.shape)
                     outputs = self.text_encoder(negative_input_ids, attention_mask=negative_attention_mask,
                                                 return_dict=True, output_hidden_states=True)
                     negative_pooled_embeds = outputs.text_embeds
                     negative_encoder_hidden_states = outputs.hidden_states[-2]
                 else:
+                    print(negative_attention_mask.shape)
                     negative_encoder_hidden_states = self.text_encoder(negative_input_ids,
                                                                        attention_mask=negative_attention_mask).last_hidden_state
                     negative_pooled_embeds = None
@@ -188,6 +192,7 @@ class PipelineMuse:
                 tokenized_text = self.tokenizer("", padding="max_length", return_tensors="pt")
                 empty_input = tokenized_text.input_ids.to(self.text_encoder.device)
                 attention_mask = tokenized_text.attention_mask.to(self.text_encoder.device)
+                print(attention_mask.shape)
                 outputs = self.text_encoder(empty_input, attention_mask=attention_mask, output_hidden_states=True)
                 empty_embeds = outputs.hidden_states[-2]
                 empty_cond_embeds = outputs[0]

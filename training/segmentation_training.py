@@ -35,7 +35,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.optim import AdamW  # why is shampoo not available in PT :(
-from transformers import Adafactor, AutoTokenizer, CLIPTextModel, CLIPTokenizer
+from transformers import Adafactor, CLIPTextModel, CLIPTokenizer, CLIPTextModelWithProjection
 from transformers import (
     T5EncoderModel,
     T5Tokenizer,
@@ -56,7 +56,6 @@ from muse import (
 )
 from muse.lr_schedulers import get_scheduler
 from optimizer import Lion
-from training.text_encoder import MultilingualCLIP
 
 try:
     import apex
@@ -787,12 +786,12 @@ def main():
     is_pre_encode = config.training.get("pre_encode", False)
     if not is_pre_encode:
         if config.model.text_encoder.type == "clip":
-            # text_encoder_cls = (
-            #     CLIPTextModelWithProjection
-            #     if config.model.transformer.get("add_cond_embeds", False)
-            #     else CLIPTextModel
-            # )
-            text_encoder = CLIPTextModel.from_pretrained(config.model.text_encoder.pretrained)
+            text_encoder_cls = (
+                CLIPTextModelWithProjection
+                if config.model.transformer.get("add_cond_embeds", False)
+                else CLIPTextModel
+            )
+            text_encoder = text_encoder_cls.from_pretrained(config.model.text_encoder.pretrained, projection_dim=768)
             tokenizer = CLIPTokenizer.from_pretrained(config.model.text_encoder.pretrained)
             if config.model.text_encoder.get("pad_token_id", None):
                 tokenizer.pad_token_id = config.model.text_encoder.pad_token_id
@@ -889,10 +888,12 @@ def main():
         {
             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": optimizer_config.weight_decay,
+            "lr": optimizer_config.learning_rate
         },
         {
             "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
             "weight_decay": 0.0,
+            "lr": optimizer_config.learning_rate
         },
     ]
 
@@ -966,8 +967,7 @@ def main():
         ema.to(accelerator.device)
 
     if not is_pre_encode and config.model.transformer.get("use_empty_embeds_for_uncond", False):
-        tokenized_empty_inputs = tokenizer("", padding="max_length", return_tensors="pt", max_length=77)
-        empty_input = tokenized_empty_inputs.input_ids.to(accelerator.device)
+        empty_input = tokenizer("", padding="max_length", return_tensors="pt").input_ids.to(accelerator.device)
         outputs = text_encoder(empty_input, output_hidden_states=True)
         if config.model.transformer.get("add_cond_embeds", False):
             empty_embeds = outputs.hidden_states[-2]
@@ -1060,8 +1060,8 @@ def main():
             else:
                 soft_targets = None
 
-                if True:
-                    split_batch_size = 2
+                if config.training.get("split_vae_encode", False):
+                    split_batch_size = config.training.split_vae_encode
                     # Use a batch of at most split_vae_encode images to encode and then concat the results
                     batch_size = pixel_values_or_image_ids.shape[0]
                     num_splits = math.ceil(batch_size / split_batch_size)
@@ -1076,8 +1076,7 @@ def main():
 
         if not is_pre_encode:
             if config.model.transformer.get("add_cond_embeds", False):
-                outputs = text_encoder(text_input_ids_or_embeds, return_dict=True,
-                                       output_hidden_states=True)
+                outputs = text_encoder(text_input_ids_or_embeds, return_dict=True, output_hidden_states=True)
                 encoder_hidden_states = outputs.hidden_states[-2]
                 clip_embeds = outputs[0]
             else:
@@ -1320,6 +1319,19 @@ def main():
                         ema.copy_to(model.parameters())
 
                     generate_images(
+                        model,
+                        vq_model,
+                        text_encoder,
+                        tokenizer,
+                        accelerator,
+                        config,
+                        global_step + 1,
+                        mask_schedule=mask_schedule,
+                        empty_embeds=empty_embeds,
+                        empty_clip_embeds=empty_clip_embeds,
+                    )
+
+                    generate_inpainting_images(
                         model,
                         vq_model,
                         text_encoder,

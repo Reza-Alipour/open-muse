@@ -273,7 +273,6 @@ def validate_model(
         input_ids = tokenized.input_ids
         pixel_values = pixel_values.to(accelerator.device, non_blocking=True)
         input_ids = input_ids.to(accelerator.device, non_blocking=True)
-        attention = tokenized.attention_mask.to(accelerator.device, non_blocking=True)
         (
             input_ids,
             encoder_hidden_states,
@@ -283,7 +282,7 @@ def validate_model(
             loss_weight,
             clip_embeds,
             micro_conds,
-        ) = prepare_inputs_and_labels(pixel_values, input_ids, batch=batch, is_train=False, attention=attention)
+        ) = prepare_inputs_and_labels(pixel_values, input_ids, batch=batch, is_train=False)
         _, loss = model(
             input_ids=input_ids,
             encoder_hidden_states=encoder_hidden_states,
@@ -366,16 +365,14 @@ def generate_images(
         max_length=config.dataset.preprocessing.max_seq_length,
     )
     input_ids = tokenized_inputs.input_ids
-    attention_masks = tokenized_inputs.attention_mask
 
     if config.model.transformer.get("add_cond_embeds", False):
-        outputs = text_encoder(input_ids.to(accelerator.device), attention_mask=attention_masks.to(accelerator.device),
+        outputs = text_encoder(input_ids.to(accelerator.device),
                                return_dict=True, output_hidden_states=True)
         encoder_hidden_states = outputs.hidden_states[-2]
         clip_embeds = outputs[0]
     else:
-        encoder_hidden_states = text_encoder(input_ids.to(accelerator.device),
-                                             attention_mask=attention_masks.to(accelerator.device)).last_hidden_state
+        encoder_hidden_states = text_encoder(input_ids.to(accelerator.device)).last_hidden_state
         clip_embeds = None
 
     if config.model.transformer.get("add_micro_cond_embeds", False):
@@ -971,8 +968,7 @@ def main():
     if not is_pre_encode and config.model.transformer.get("use_empty_embeds_for_uncond", False):
         tokenized_empty_inputs = tokenizer("", padding="max_length", return_tensors="pt", max_length=77)
         empty_input = tokenized_empty_inputs.input_ids.to(accelerator.device)
-        attentions = tokenized_empty_inputs.attention_mask.to(accelerator.device)
-        outputs = text_encoder(empty_input, attention_mask=attentions, output_hidden_states=True)
+        outputs = text_encoder(empty_input, output_hidden_states=True)
         if config.model.transformer.get("add_cond_embeds", False):
             empty_embeds = outputs.hidden_states[-2]
             empty_clip_embeds = outputs[0]
@@ -1051,7 +1047,6 @@ def main():
             min_masking_rate: float = 0.0,
             batch: Any = None,
             is_train: bool = True,
-            attention=None
     ):
         if is_pre_encode:
             image_tokens = pixel_values_or_image_ids
@@ -1081,12 +1076,12 @@ def main():
 
         if not is_pre_encode:
             if config.model.transformer.get("add_cond_embeds", False):
-                outputs = text_encoder(text_input_ids_or_embeds, attention_mask=attention, return_dict=True,
+                outputs = text_encoder(text_input_ids_or_embeds, return_dict=True,
                                        output_hidden_states=True)
                 encoder_hidden_states = outputs.hidden_states[-2]
                 clip_embeds = outputs[0]
             else:
-                encoder_hidden_states = text_encoder(text_input_ids_or_embeds, attention_mask=attention)[0]
+                encoder_hidden_states = text_encoder(text_input_ids_or_embeds)[0]
                 clip_embeds = None
 
             if config.model.transformer.get("add_micro_cond_embeds", False):
@@ -1138,11 +1133,9 @@ def main():
                 return_tensors="pt"
             )
             input_ids = tokenized.input_ids
-            attentions = tokenized.attention_mask
 
             pixel_values = pixel_values.to(accelerator.device, non_blocking=True)
             input_ids = input_ids.to(accelerator.device, non_blocking=True)
-            attentions = attentions.to(accelerator.device, non_blocking=True)
             data_time_m.update(time.time() - end)
 
             # encode images to image tokens, mask them and create input and labels
@@ -1155,8 +1148,7 @@ def main():
                 loss_weight,
                 clip_embeds,
                 micro_conds,
-            ) = prepare_inputs_and_labels(pixel_values, input_ids, config.training.min_masking_rate,
-                                          attention=attentions, batch=batch)
+            ) = prepare_inputs_and_labels(pixel_values, input_ids, config.training.min_masking_rate, batch=batch)
 
             # log the inputs for the first step of the first epoch
             if global_step == 0 and epoch == 0:

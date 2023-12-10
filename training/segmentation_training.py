@@ -408,8 +408,8 @@ def generate_images(
     # so we clamp them to the correct range.
     gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
 
-    if config.training.get("split_vae_encode", False):
-        split_batch_size = config.training.split_vae_encode
+    if True:
+        split_batch_size = 2
         # Use a batch of at most split_vae_encode images to encode and then concat the results
         batch_size = gen_token_ids.shape[0]
         num_splits = math.ceil(batch_size / split_batch_size)
@@ -511,8 +511,8 @@ def generate_inpainting_images(
     # so we clamp them to the correct range.
     gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
 
-    if config.training.get("split_vae_encode", False):
-        split_batch_size = config.training.split_vae_encode
+    if True:
+        split_batch_size = 2
         # Use a batch of at most split_vae_encode images to decode and then concat the results
         batch_size = gen_token_ids.shape[0]
         num_splits = math.ceil(batch_size / split_batch_size)
@@ -555,7 +555,7 @@ def inpainting_validation_data():
 
         for file_name in os.listdir(f"./inpainting_validation/{folder_name}"):
             if file_name.startswith(segment_or_landmark):
-                image = Image.open(f"./inpainting_validation/{folder_name}/{file_name}")
+                image = Image.open(f"./inpainting_validation/{folder_name}/{file_name}").convert('RGB')
 
             if file_name.startswith("mask"):
                 mask = Image.open(f"./inpainting_validation/{folder_name}/{file_name}").convert("L")
@@ -1065,8 +1065,8 @@ def main():
             else:
                 soft_targets = None
 
-                if config.training.get("split_vae_encode", False):
-                    split_batch_size = config.training.split_vae_encode
+                if True:
+                    split_batch_size = 2
                     # Use a batch of at most split_vae_encode images to encode and then concat the results
                     batch_size = pixel_values_or_image_ids.shape[0]
                     num_splits = math.ceil(batch_size / split_batch_size)

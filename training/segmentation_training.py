@@ -572,7 +572,7 @@ def inpainting_validation_data():
 
         for file_name in os.listdir(f"./inpainting_validation/{folder_name}"):
             if file_name.startswith(segment_or_landmark):
-                image = Image.open(f"./inpainting_validation/{folder_name}/{file_name}")
+                image = Image.open(f"./inpainting_validation/{folder_name}/{file_name}").convert('RGB')
 
             if file_name.startswith("mask"):
                 mask = Image.open(f"./inpainting_validation/{folder_name}/{file_name}").convert("L")

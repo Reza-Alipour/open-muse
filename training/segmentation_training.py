@@ -495,7 +495,9 @@ def generate_inpainting_images(
     attention_mask = tokenized.attention_mask
 
     if config.model.transformer.get("add_cond_embeds", False):
-        outputs = text_encoder(token_input_ids.to(accelerator.device), return_dict=True, output_hidden_states=True)
+        outputs = text_encoder(token_input_ids.to(accelerator.device),
+                               attention_mask=attention_mask.to(accelerator.device), return_dict=True,
+                               output_hidden_states=True)
         encoder_hidden_states = outputs.hidden_states[-2]
         clip_embeds = outputs[0]
     else:

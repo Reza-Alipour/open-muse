@@ -425,7 +425,7 @@ def generate_images(
     # so we clamp them to the correct range.
     gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
 
-    if config.training.get("split_vae_encode", False):
+    if True:
         split_batch_size = config.training.split_vae_encode
         # Use a batch of at most split_vae_encode images to encode and then concat the results
         batch_size = gen_token_ids.shape[0]
@@ -484,21 +484,23 @@ def generate_inpainting_images(
     validation_images = validation_images.to(accelerator.device)
     _, validation_images = vq_model.encode(validation_images)
     validation_images[validation_masks] = mask_token_id
-
-    token_input_ids = tokenizer(
+    tokenized = tokenizer(
         validation_prompts,
         return_tensors="pt",
         padding="max_length",
         truncation=True,
         max_length=config.dataset.preprocessing.max_seq_length,
-    ).input_ids
+    )
+    token_input_ids = tokenized.input_ids
+    attention_mask = tokenized.attention_mask
 
     if config.model.transformer.get("add_cond_embeds", False):
         outputs = text_encoder(token_input_ids.to(accelerator.device), return_dict=True, output_hidden_states=True)
         encoder_hidden_states = outputs.hidden_states[-2]
         clip_embeds = outputs[0]
     else:
-        encoder_hidden_states = text_encoder(token_input_ids.to(accelerator.device)).last_hidden_state
+        encoder_hidden_states = text_encoder(token_input_ids.to(accelerator.device),
+                                             attention_mask=attention_mask.to(accelerator.device)).last_hidden_state
         clip_embeds = None
 
     if config.model.transformer.get("add_micro_cond_embeds", False):
@@ -528,7 +530,7 @@ def generate_inpainting_images(
     # so we clamp them to the correct range.
     gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
 
-    if config.training.get("split_vae_encode", False):
+    if True:
         split_batch_size = config.training.split_vae_encode
         # Use a batch of at most split_vae_encode images to decode and then concat the results
         batch_size = gen_token_ids.shape[0]

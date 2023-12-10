@@ -426,7 +426,7 @@ def generate_images(
     gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
 
     if True:
-        split_batch_size = config.training.split_vae_encode
+        split_batch_size = 2
         # Use a batch of at most split_vae_encode images to encode and then concat the results
         batch_size = gen_token_ids.shape[0]
         num_splits = math.ceil(batch_size / split_batch_size)
@@ -531,7 +531,7 @@ def generate_inpainting_images(
     gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
 
     if True:
-        split_batch_size = config.training.split_vae_encode
+        split_batch_size = 2
         # Use a batch of at most split_vae_encode images to decode and then concat the results
         batch_size = gen_token_ids.shape[0]
         num_splits = math.ceil(batch_size / split_batch_size)

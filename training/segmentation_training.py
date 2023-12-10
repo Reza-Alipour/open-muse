@@ -35,7 +35,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.optim import AdamW  # why is shampoo not available in PT :(
-from transformers import Adafactor, AutoTokenizer
+from transformers import Adafactor, AutoTokenizer, CLIPTextModel, CLIPTokenizer
 from transformers import (
     T5EncoderModel,
     T5Tokenizer,
@@ -325,29 +325,12 @@ def generate_images(
     # fmt: off
     captions = [
         "This young woman has wavy blond hair, wearing lipstick and earrings. She has an attractive oval face with a slight open mouth.",
-        "این زن جوان با موهای بلوند موج دارش رژ لب و گوشواره می پوشد. چهره بیضی او جذاب است.",
-        "Mit ihrem welligen blonden Haar trägt diese junge Frau Lippenstift und Ohrringe. Ihr ovales Gesicht ist attraktiv.",
-        "Avec ses cheveux blonds ondulés, cette jeune femme porte du rouge à lèvres et des boucles d'oreilles. Son visage ovale est séduisant.",
-        "Con i suoi capelli biondi ondulati, questa giovane donna indossa rossetto e orecchini. Il suo viso ovale è attraente.",
-        "Con su cabello rubio ondulado, esta joven usa lápiz labial y aretes. Su rostro ovalado es atractivo.",
         "With her wavy blond hair, this young woman wears lipstick and earrings. Her oval face is attractive.",
         "Her big lips and blonde hair complement her arched eyebrows and heavy makeup, she's smiling.",
         "This young woman has a big nose and arched eyebrows. She has bags under her eyes.",
-        "Esta joven tiene una nariz grande y cejas arqueadas. Tiene bolsas debajo de los ojos.",
-        "Questa giovane donna ha un grande naso e le sopracciglia arcuate. Ha le borse sotto gli occhi.",
-        "Cette jeune femme a un gros nez et des sourcils arqués. Elle a des poches sous les yeux.",
-        "این زن جوان بینی بزرگ و ابروهای کمانی دارد. زیر چشمش کیسه هایی دارد.",
-        "Diese junge Frau hat eine große Nase und hochgezogene Augenbrauen. Sie hat Tränensäcke unter den Augen.",
         "This man has narrow eyes, a pointy nose, and bushy eyebrows. He is smiling and has a beard.",
-        "Este hombre tiene ojos entrecerrados, nariz puntiaguda y cejas pobladas. Sonríe y tiene barba.",
-        "Quest'uomo ha gli occhi stretti, il naso a punta e le sopracciglia folte. Sorride e ha la barba.",
-        "Cet homme a les yeux étroits, le nez pointu et les sourcils broussailleux. Il sourit et a une barbe.",
-        "Dieser Mann hat schmale Augen, eine spitze Nase und buschige Augenbrauen. Er lächelt und hat einen Bart.",
-        "این مرد چشمان باریک، بینی نوک تیز و ابروهای پرپشت دارد. او لبخند می زند و ریش دارد.",
         "Her mouth is slightly open, with high cheekbones giving her an attractive look. Rosy cheeks and heavy makeup enhance her beauty."
         "This man has a big nose and bags under his eyes. He is clean-shaven and chubby.",
-        "این مرد جوان جذاب کیسه هایی زیر چشمانش و ریش دارد.",
-        "Este hombre tiene una nariz grande y bolsas debajo de los ojos. Está bien afeitado y es gordito.",
     ]
     # fmt: on
 
@@ -357,8 +340,8 @@ def generate_images(
     validation_prompts = captions
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":
-            text_encoder = MultilingualCLIP.from_pretrained('M-CLIP/LABSE-Vit-L-14')
-            tokenizer = AutoTokenizer.from_pretrained('M-CLIP/LABSE-Vit-L-14')
+            text_encoder = CLIPTextModel.from_pretrained(config.model.text_encoder.pretrained)
+            tokenizer = CLIPTokenizer.from_pretrained(config.model.text_encoder.pretrained)
         elif config.model.text_encoder.type == "t5":
             text_encoder = T5EncoderModel.from_pretrained(config.model.text_encoder.pretrained)
             tokenizer = T5Tokenizer.from_pretrained(config.model.text_encoder.pretrained)
@@ -812,8 +795,8 @@ def main():
             #     if config.model.transformer.get("add_cond_embeds", False)
             #     else CLIPTextModel
             # )
-            text_encoder = MultilingualCLIP.from_pretrained('M-CLIP/LABSE-Vit-L-14')
-            tokenizer = AutoTokenizer.from_pretrained('M-CLIP/LABSE-Vit-L-14')
+            text_encoder = CLIPTextModel.from_pretrained(config.model.text_encoder.pretrained)
+            tokenizer = CLIPTokenizer.from_pretrained(config.model.text_encoder.pretrained)
             if config.model.text_encoder.get("pad_token_id", None):
                 tokenizer.pad_token_id = config.model.text_encoder.pad_token_id
         elif config.model.text_encoder.type == "t5":

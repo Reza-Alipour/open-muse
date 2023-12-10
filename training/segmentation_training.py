@@ -27,6 +27,7 @@ import numpy as np
 import plotly.express as px
 import torch
 import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 import wandb
 from PIL import Image
 from accelerate import Accelerator
@@ -34,7 +35,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.optim import AdamW  # why is shampoo not available in PT :(
-from transformers import Adafactor, AutoTokenizer, XLMRobertaTokenizer
+from transformers import Adafactor, AutoTokenizer
 from transformers import (
     T5EncoderModel,
     T5Tokenizer,
@@ -323,14 +324,37 @@ def generate_images(
     model.eval()
     # fmt: off
     captions = [
-        "She is wearing earrings. She has pointy nose, arched eyebrows, high cheekbones, straight hair, big lips, mouth slightly open, and blond hair."
+        "This young woman has wavy blond hair, wearing lipstick and earrings. She has an attractive oval face with a slight open mouth.",
+        "این زن جوان با موهای بلوند موج دارش رژ لب و گوشواره می پوشد. چهره بیضی او جذاب است.",
+        "Mit ihrem welligen blonden Haar trägt diese junge Frau Lippenstift und Ohrringe. Ihr ovales Gesicht ist attraktiv.",
+        "Avec ses cheveux blonds ondulés, cette jeune femme porte du rouge à lèvres et des boucles d'oreilles. Son visage ovale est séduisant.",
+        "Con i suoi capelli biondi ondulati, questa giovane donna indossa rossetto e orecchini. Il suo viso ovale è attraente.",
+        "Con su cabello rubio ondulado, esta joven usa lápiz labial y aretes. Su rostro ovalado es atractivo.",
+        "With her wavy blond hair, this young woman wears lipstick and earrings. Her oval face is attractive.",
+        "Her big lips and blonde hair complement her arched eyebrows and heavy makeup, she's smiling.",
+        "This young woman has a big nose and arched eyebrows. She has bags under her eyes.",
+        "Esta joven tiene una nariz grande y cejas arqueadas. Tiene bolsas debajo de los ojos.",
+        "Questa giovane donna ha un grande naso e le sopracciglia arcuate. Ha le borse sotto gli occhi.",
+        "Cette jeune femme a un gros nez et des sourcils arqués. Elle a des poches sous les yeux.",
+        "این زن جوان بینی بزرگ و ابروهای کمانی دارد. زیر چشمش کیسه هایی دارد.",
+        "Diese junge Frau hat eine große Nase und hochgezogene Augenbrauen. Sie hat Tränensäcke unter den Augen.",
+        "This man has narrow eyes, a pointy nose, and bushy eyebrows. He is smiling and has a beard.",
+        "Este hombre tiene ojos entrecerrados, nariz puntiaguda y cejas pobladas. Sonríe y tiene barba.",
+        "Quest'uomo ha gli occhi stretti, il naso a punta e le sopracciglia folte. Sorride e ha la barba.",
+        "Cet homme a les yeux étroits, le nez pointu et les sourcils broussailleux. Il sourit et a une barbe.",
+        "Dieser Mann hat schmale Augen, eine spitze Nase und buschige Augenbrauen. Er lächelt und hat einen Bart.",
+        "این مرد چشمان باریک، بینی نوک تیز و ابروهای پرپشت دارد. او لبخند می زند و ریش دارد.",
+        "Her mouth is slightly open, with high cheekbones giving her an attractive look. Rosy cheeks and heavy makeup enhance her beauty."
+        "This man has a big nose and bags under his eyes. He is clean-shaven and chubby.",
+        "این مرد جوان جذاب کیسه هایی زیر چشمانش و ریش دارد.",
+        "Este hombre tiene una nariz grande y bolsas debajo de los ojos. Está bien afeitado y es gordito.",
     ]
     # fmt: on
 
     # read validation prompts from file
-    validation_prompts = [f'Generate face segmentation | {c}' for c in captions] + [f'Generate face landmark | {c}' for
-                                                                                    c in captions]
-
+    # validation_prompts = [f'Generate face segmentation | {c}' for c in captions] + [f'Generate face landmark | {c}' for
+    #                                                                                 c in captions]
+    validation_prompts = captions
     if config.training.get("pre_encode", False):
         if config.model.text_encoder.type == "clip":
             text_encoder = MultilingualCLIP.from_pretrained('M-CLIP/LABSE-Vit-L-14')
@@ -433,7 +457,109 @@ def generate_images(
     wandb.log({"generated_images": wandb_images}, step=global_step)
 
 
+@torch.no_grad()
+def generate_inpainting_images(
+        model,
+        vq_model,
+        text_encoder,
+        tokenizer,
+        accelerator,
+        config,
+        global_step,
+        mask_schedule,
+        empty_embeds=None,
+        empty_clip_embeds=None,
+):
+    assert not config.training.get("pre_encode", False)
+
+    model.eval()
+
+    mask_token_id = config.model.transformer.vocab_size - 1
+
+    validation_prompts, validation_images, validation_masks = inpainting_validation_data()
+
+    validation_masks = validation_masks_to_latent_tensors(validation_masks).to(accelerator.device)
+
+    validation_images = torch.stack([TF.to_tensor(x) for x in validation_images])
+    validation_images = validation_images.to(accelerator.device)
+    _, validation_images = vq_model.encode(validation_images)
+    validation_images[validation_masks] = mask_token_id
+
+    token_input_ids = tokenizer(
+        validation_prompts,
+        return_tensors="pt",
+        padding="max_length",
+        truncation=True,
+        max_length=config.dataset.preprocessing.max_seq_length,
+    ).input_ids
+
+    if config.model.transformer.get("add_cond_embeds", False):
+        outputs = text_encoder(token_input_ids.to(accelerator.device), return_dict=True, output_hidden_states=True)
+        encoder_hidden_states = outputs.hidden_states[-2]
+        clip_embeds = outputs[0]
+    else:
+        encoder_hidden_states = text_encoder(token_input_ids.to(accelerator.device)).last_hidden_state
+        clip_embeds = None
+
+    if config.model.transformer.get("add_micro_cond_embeds", False):
+        resolution = config.dataset.preprocessing.resolution
+        micro_conds = torch.tensor(
+            [resolution, resolution, 0, 0, 6], device=encoder_hidden_states.device, dtype=encoder_hidden_states.dtype
+        )
+        micro_conds = micro_conds.unsqueeze(0).repeat(encoder_hidden_states.shape[0], 1)
+
+    with torch.autocast("cuda", dtype=encoder_hidden_states.dtype, enabled=accelerator.mixed_precision != "no"):
+        # Generate images
+        gen_token_ids = accelerator.unwrap_model(model).generate2(
+            input_ids=validation_images,
+            encoder_hidden_states=encoder_hidden_states,
+            cond_embeds=clip_embeds,
+            empty_embeds=empty_embeds,
+            empty_cond_embeds=empty_clip_embeds,
+            micro_conds=micro_conds,
+            guidance_scale=config.training.guidance_scale,
+            temperature=config.training.get("generation_temperature", 1.0),
+            timesteps=config.training.generation_timesteps,
+            noise_schedule=mask_schedule,
+            noise_type=config.training.get("noise_type", "mask"),
+            predict_all_tokens=config.training.get("predict_all_tokens", False),
+        )
+    # In the beginning of training, the model is not fully trained and the generated token ids can be out of range
+    # so we clamp them to the correct range.
+    gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
+
+    if config.training.get("split_vae_encode", False):
+        split_batch_size = config.training.split_vae_encode
+        # Use a batch of at most split_vae_encode images to decode and then concat the results
+        batch_size = gen_token_ids.shape[0]
+        num_splits = math.ceil(batch_size / split_batch_size)
+        images = []
+        for i in range(num_splits):
+            start_idx = i * split_batch_size
+            end_idx = min((i + 1) * split_batch_size, batch_size)
+            images.append(vq_model.decode_code(gen_token_ids[start_idx:end_idx]))
+        images = torch.cat(images, dim=0)
+    else:
+        images = vq_model.decode_code(gen_token_ids)
+
+    # Convert to PIL images
+    images = 2.0 * images - 1.0
+    images = torch.clamp(images, -1.0, 1.0)
+    images = (images + 1.0) / 2.0
+    images *= 255.0
+    images = images.permute(0, 2, 3, 1).cpu().numpy().astype(np.uint8)
+    pil_images = [Image.fromarray(image) for image in images]
+
+    # Log images
+    wandb_images = [wandb.Image(image, caption=validation_prompts[i]) for i, image in enumerate(pil_images)]
+    wandb.log({"generated_inpainting_images": wandb_images}, step=global_step)
+
+    model.train()
+
+
 def inpainting_validation_data():
+    # mask_or_landmark = 'landmark'
+    segment_or_landmark = 'segment'
     validation_prompts = []
     validation_images = []
     validation_masks = []
@@ -445,7 +571,7 @@ def inpainting_validation_data():
         mask = None
 
         for file_name in os.listdir(f"./inpainting_validation/{folder_name}"):
-            if file_name.startswith("image"):
+            if file_name.startswith("segment_or_landmark"):
                 image = Image.open(f"./inpainting_validation/{folder_name}/{file_name}")
 
             if file_name.startswith("mask"):
@@ -697,7 +823,7 @@ def main():
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp4500', token=hf_read_token)
+        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp3000', token=hf_read_token)
 
         # Freeze the text model and VQGAN
         text_encoder.requires_grad_(False)
@@ -1222,6 +1348,19 @@ def main():
                         ema.copy_to(model.parameters())
 
                     generate_images(
+                        model,
+                        vq_model,
+                        text_encoder,
+                        tokenizer,
+                        accelerator,
+                        config,
+                        global_step + 1,
+                        mask_schedule=mask_schedule,
+                        empty_embeds=empty_embeds,
+                        empty_clip_embeds=empty_clip_embeds,
+                    )
+
+                    generate_inpainting_images(
                         model,
                         vq_model,
                         text_encoder,

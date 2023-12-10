@@ -30,13 +30,11 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import wandb
+from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
-from data import ClassificationDataset, Text2ImageDataset
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from optimizer import Lion
-from PIL import Image
 from torch.optim import AdamW  # why is shampoo not available in PT :(
 from transformers import (
     CLIPTextModel,
@@ -48,6 +46,7 @@ from transformers import (
 
 import muse
 import muse.training_utils
+from data import ClassificationDataset, Text2ImageDataset
 from muse import (
     MOVQ,
     EMAModel,
@@ -59,6 +58,7 @@ from muse import (
     get_mask_chedule,
 )
 from muse.lr_schedulers import get_scheduler
+from optimizer import Lion
 
 try:
     import apex
@@ -173,7 +173,7 @@ def mask_or_random_replace_tokens(image_tokens, mask_id, config, mask_schedule, 
         batch_randperm = torch.rand(batch_size, seq_len, device=image_tokens.device).argsort(dim=-1)
         mask = batch_randperm < num_token_masked.unsqueeze(-1)
     else:
-        resolution = int(seq_len**0.5)
+        resolution = int(seq_len ** 0.5)
         mask = torch.zeros((batch_size, resolution, resolution), device=image_tokens.device)
 
         # TODO - would be nice to vectorize
@@ -193,9 +193,9 @@ def mask_or_random_replace_tokens(image_tokens, mask_id, config, mask_schedule, 
             start_idx_width = random.randint(0, resolution - num_token_masked_width)
 
             mask[
-                batch_idx,
-                start_idx_height : start_idx_height + num_token_masked_height,
-                start_idx_width : start_idx_width + num_token_masked_width,
+            batch_idx,
+            start_idx_height: start_idx_height + num_token_masked_height,
+            start_idx_width: start_idx_width + num_token_masked_width,
             ] = 1
 
         mask = mask.reshape(batch_size, seq_len)
@@ -214,8 +214,8 @@ def mask_or_random_replace_tokens(image_tokens, mask_id, config, mask_schedule, 
         raise ValueError(f"noise_type {config.training.noise_type} not supported")
 
     if (
-        config.training.get("predict_all_tokens", False)
-        or config.training.get("noise_type", "mask") == "random_replace"
+            config.training.get("predict_all_tokens", False)
+            or config.training.get("noise_type", "mask") == "random_replace"
     ):
         labels = image_tokens
         loss_weight = get_loss_weight(mask_prob, mask.long())
@@ -263,7 +263,8 @@ def main():
         mixed_precision=config.training.mixed_precision,
         log_with="wandb",
         project_dir=config.experiment.logging_dir,
-        split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
+        split_batches=True,
+        # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
     )
 
     if accelerator.distributed_type == DistributedType.DEEPSPEED:
@@ -396,10 +397,10 @@ def main():
     learning_rate = optimizer_config.learning_rate
     if optimizer_config.scale_lr:
         learning_rate = (
-            learning_rate
-            * config.training.batch_size
-            * accelerator.num_processes
-            * config.training.gradient_accumulation_steps
+                learning_rate
+                * config.training.batch_size
+                * accelerator.num_processes
+                * config.training.gradient_accumulation_steps
         )
 
     optimizer_type = config.optimizer.name
@@ -429,10 +430,12 @@ def main():
         {
             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": optimizer_config.weight_decay,
+            "lr": optimizer_config.learning_rate
         },
         {
             "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
             "weight_decay": 0.0,
+            "lr": optimizer_config.learning_rate
         },
     ]
 
@@ -459,7 +462,7 @@ def main():
 
     total_batch_size_without_accum = config.training.batch_size * accelerator.num_processes
     total_batch_size = (
-        config.training.batch_size * accelerator.num_processes * config.training.gradient_accumulation_steps
+            config.training.batch_size * accelerator.num_processes * config.training.gradient_accumulation_steps
     )
 
     # DataLoaders creation:
@@ -562,7 +565,7 @@ def main():
     # Train!
     logger.info("***** Running training *****")
     logger.info(f"  Num training steps = {config.training.max_train_steps}")
-    logger.info(f"  Instantaneous batch size per device = { config.training.batch_size}")
+    logger.info(f"  Instantaneous batch size per device = {config.training.batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {config.training.gradient_accumulation_steps}")
     global_step = 0
@@ -611,11 +614,11 @@ def main():
 
     @torch.no_grad()
     def prepare_inputs_and_labels(
-        pixel_values_or_image_ids: Union[torch.FloatTensor, torch.LongTensor],
-        text_input_ids_or_embeds: Union[torch.LongTensor, torch.LongTensor],
-        min_masking_rate: float = 0.0,
-        batch: Any = None,
-        is_train: bool = True,
+            pixel_values_or_image_ids: Union[torch.FloatTensor, torch.LongTensor],
+            text_input_ids_or_embeds: Union[torch.LongTensor, torch.LongTensor],
+            min_masking_rate: float = 0.0,
+            batch: Any = None,
+            is_train: bool = True,
     ):
         if is_pre_encode:
             image_tokens = pixel_values_or_image_ids
@@ -623,7 +626,8 @@ def main():
         else:
             if config.training.use_soft_code_target and is_train:
                 soft_targets, image_tokens = vq_model.get_soft_code(
-                    pixel_values_or_image_ids, temp=config.training.soft_code_temp, stochastic=config.training.use_stochastic_code
+                    pixel_values_or_image_ids, temp=config.training.soft_code_temp,
+                    stochastic=config.training.use_stochastic_code
                 )
             else:
                 soft_targets = None
@@ -718,8 +722,8 @@ def main():
                 batch_size = encoder_hidden_states.shape[0]
 
                 mask = (
-                    torch.zeros((batch_size, 1, 1), device=encoder_hidden_states.device).float().uniform_(0, 1)
-                    < config.training.cond_dropout_prob
+                        torch.zeros((batch_size, 1, 1), device=encoder_hidden_states.device).float().uniform_(0, 1)
+                        < config.training.cond_dropout_prob
                 )
 
                 empty_embeds_ = empty_embeds.expand(batch_size, -1, -1)
@@ -763,9 +767,9 @@ def main():
 
                 # log gradient norm before zeroing it
                 if (
-                    accelerator.sync_gradients
-                    and (global_step + 1) % config.experiment.log_grad_norm_every == 0
-                    and accelerator.is_main_process
+                        accelerator.sync_gradients
+                        and (global_step + 1) % config.experiment.log_grad_norm_every == 0
+                        and accelerator.is_main_process
                 ):
                     log_grad_norm(model, accelerator, global_step + 1)
 
@@ -785,7 +789,7 @@ def main():
                 # Log metrics
                 if (global_step + 1) % config.experiment.log_every == 0:
                     samples_per_second_per_gpu = (
-                        config.training.gradient_accumulation_steps * config.training.batch_size / batch_time_m.val
+                            config.training.gradient_accumulation_steps * config.training.batch_size / batch_time_m.val
                     )
                     logs = {
                         "step_loss": avg_loss.item(),
@@ -810,23 +814,23 @@ def main():
                     data_time_m.reset()
 
                 if (
-                    ("log_pixel_entropy_every" in config.experiment)
-                    and ((global_step + 1) % config.experiment.log_pixel_entropy_every == 0)
-                    and accelerator.is_main_process
+                        ("log_pixel_entropy_every" in config.experiment)
+                        and ((global_step + 1) % config.experiment.log_pixel_entropy_every == 0)
+                        and accelerator.is_main_process
                 ):
                     log_pixel_entropy(logits, input_ids, mask_id, accelerator, global_step + 1)
 
                 if (
-                    ("log_image_entropy_every" in config.experiment)
-                    and ((global_step + 1) % config.experiment.log_image_entropy_every == 0)
-                    and accelerator.is_main_process
+                        ("log_image_entropy_every" in config.experiment)
+                        and ((global_step + 1) % config.experiment.log_image_entropy_every == 0)
+                        and accelerator.is_main_process
                 ):
                     log_image_entropy(logits, input_ids, mask_id, accelerator, global_step + 1)
 
                 if (
-                    ("log_cross_entropy_every" in config.experiment)
-                    and ((global_step + 1) % config.experiment.log_cross_entropy_every == 0)
-                    and accelerator.is_main_process
+                        ("log_cross_entropy_every" in config.experiment)
+                        and ((global_step + 1) % config.experiment.log_cross_entropy_every == 0)
+                        and accelerator.is_main_process
                 ):
                     log_cross_entropy(
                         logits,
@@ -840,9 +844,9 @@ def main():
                     )
 
                 if (
-                    ("log_token_probability_distributions_every" in config.experiment)
-                    and ((global_step + 1) % config.experiment.log_token_probability_distributions_every == 0)
-                    and accelerator.is_main_process
+                        ("log_token_probability_distributions_every" in config.experiment)
+                        and ((global_step + 1) % config.experiment.log_token_probability_distributions_every == 0)
+                        and accelerator.is_main_process
                 ):
                     log_token_probability_distributions(logits, input_ids, mask_id, accelerator, global_step + 1)
 
@@ -941,12 +945,12 @@ def main():
 
 @torch.no_grad()
 def validate_model(
-    model,
-    eval_dataloader,
-    accelerator,
-    global_step,
-    prepare_inputs_and_labels,
-    max_eval_examples=None,
+        model,
+        eval_dataloader,
+        accelerator,
+        global_step,
+        prepare_inputs_and_labels,
+        max_eval_examples=None,
 ):
     logger.info("Evaluating...")
     model.eval()
@@ -994,21 +998,23 @@ def validate_model(
 
 @torch.no_grad()
 def generate_images(
-    model,
-    vq_model,
-    text_encoder,
-    tokenizer,
-    accelerator,
-    config,
-    global_step,
-    mask_schedule,
-    empty_embeds=None,
-    empty_clip_embeds=None,
+        model,
+        vq_model,
+        text_encoder,
+        tokenizer,
+        accelerator,
+        config,
+        global_step,
+        mask_schedule,
+        empty_embeds=None,
+        empty_clip_embeds=None,
 ):
     logger.info("Generating images...")
     model.eval()
     # fmt: off
-    imagenet_class_names = ['jay', 'castle', 'coffee mug', 'desk', 'Eskimo dog,  husky', 'valley,  vale', 'red wine', 'coral reef', 'mixing bowl', 'cleaver,  meat cleaver,  chopper', 'vine snake', 'bloodhound,  sleuthhound', 'barbershop', 'ski', 'otter', 'snowmobile']
+    imagenet_class_names = ['jay', 'castle', 'coffee mug', 'desk', 'Eskimo dog,  husky', 'valley,  vale', 'red wine',
+                            'coral reef', 'mixing bowl', 'cleaver,  meat cleaver,  chopper', 'vine snake',
+                            'bloodhound,  sleuthhound', 'barbershop', 'ski', 'otter', 'snowmobile']
     # fmt: on
 
     # read validation prompts from file
@@ -1084,7 +1090,7 @@ def generate_images(
     # In the beginning of training, the model is not fully trained and the generated token ids can be out of range
     # so we clamp them to the correct range.
     gen_token_ids = torch.clamp(gen_token_ids, max=accelerator.unwrap_model(model).config.codebook_size - 1)
-    
+
     if config.training.get("split_vae_encode", False):
         split_batch_size = config.training.split_vae_encode
         # Use a batch of at most split_vae_encode images to encode and then concat the results
@@ -1098,7 +1104,7 @@ def generate_images(
         images = torch.cat(images, dim=0)
     else:
         images = vq_model.decode_code(gen_token_ids)
-    
+
     model.train()
 
     if config.training.get("pre_encode", False):
@@ -1119,16 +1125,16 @@ def generate_images(
 
 @torch.no_grad()
 def generate_inpainting_images(
-    model,
-    vq_model,
-    text_encoder,
-    tokenizer,
-    accelerator,
-    config,
-    global_step,
-    mask_schedule,
-    empty_embeds=None,
-    empty_clip_embeds=None,
+        model,
+        vq_model,
+        text_encoder,
+        tokenizer,
+        accelerator,
+        config,
+        global_step,
+        mask_schedule,
+        empty_embeds=None,
+        empty_clip_embeds=None,
 ):
     assert not config.training.get("pre_encode", False)
 

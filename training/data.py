@@ -674,9 +674,9 @@ class SegmentationDataset:
         self.ds = load_dataset(dataset_name, token = token)
 
         def custom_collate_fn(batch):
-            is_it_mask = random.randint(0, 1) == 1
+            is_it_mask = True #random.randint(0, 1) == 1
             column_name = 'mask' if is_it_mask else 'landmark'
-            prompt = 'Generate face segmentation | ' if is_it_mask else 'Generate face landmark |'
+            # prompt = 'Generate face segmentation | ' if is_it_mask else 'Generate face landmark |'
 
             def get_single_caption(c1, c2):
                 if random.randint(0,2) == 0:
@@ -690,7 +690,8 @@ class SegmentationDataset:
                     return c2
 
             masks = [sample[column_name] for sample in batch]
-            captions = [prompt + get_single_caption(sample['captions'],sample['captions_all']) for sample in batch]
+            # captions = [prompt + get_single_caption(sample['captions'],sample['captions_all']) for sample in batch]
+            captions = [get_single_caption(sample['captions_eng'],sample['captions_all']) for sample in batch]
             # image = transforms.Resize(resolution, interpolation=transforms.InterpolationMode.BILINEAR)(image)
             # get crop coordinates
             # if random.random() < 0.3:

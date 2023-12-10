@@ -1125,19 +1125,17 @@ def main():
             if i % 100 == 0:
                 accelerator.print(f'Epoch {epoch} | Batch {i}')
             pixel_values, captions = batch['masks'], batch['captions']
-            tokenized = tokenizer(
+            input_ids = tokenizer(
                 captions,
                 max_length=config.dataset.preprocessing.max_seq_length,
                 padding="max_length",
                 truncation=True,
                 return_tensors="pt"
-            )
-            input_ids = tokenized.input_ids
+            ).input_ids
 
             pixel_values = pixel_values.to(accelerator.device, non_blocking=True)
             input_ids = input_ids.to(accelerator.device, non_blocking=True)
             data_time_m.update(time.time() - end)
-
             # encode images to image tokens, mask them and create input and labels
             (
                 input_ids,
@@ -1149,7 +1147,6 @@ def main():
                 clip_embeds,
                 micro_conds,
             ) = prepare_inputs_and_labels(pixel_values, input_ids, config.training.min_masking_rate, batch=batch)
-
             # log the inputs for the first step of the first epoch
             if global_step == 0 and epoch == 0:
                 logger.info("Input ids: {}".format(input_ids))
@@ -1323,19 +1320,6 @@ def main():
                         ema.copy_to(model.parameters())
 
                     generate_images(
-                        model,
-                        vq_model,
-                        text_encoder,
-                        tokenizer,
-                        accelerator,
-                        config,
-                        global_step + 1,
-                        mask_schedule=mask_schedule,
-                        empty_embeds=empty_embeds,
-                        empty_clip_embeds=empty_clip_embeds,
-                    )
-
-                    generate_inpainting_images(
                         model,
                         vq_model,
                         text_encoder,

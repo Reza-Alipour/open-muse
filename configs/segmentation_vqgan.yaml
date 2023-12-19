@@ -2,8 +2,8 @@ wandb:
     entity: r-ap
 
 experiment:
-    project: "muse-vae"
-    name: "vqgan-training"
+    project: "vqgan"
+    name: "vqgan"
     output_dir: "output"
     max_train_examples: 30000 # total number of imagenet examples
     max_eval_examples: 1000
@@ -18,7 +18,7 @@ experiment:
 model:
     vq_model:
         type: "taming_vqgan"
-        pretrained: "reza-alipour/vqgan-segmentation"
+        pretrained: "openMUSE/vqgan-f16-8192-laion"
     gradient_checkpointing: True
     enable_xformers_memory_efficient_attention: False
 
@@ -57,7 +57,7 @@ lr_scheduler:
 training:
     gradient_accumulation_steps: 2
     batch_size: 4
-    mixed_precision: "no"
+    mixed_precision: "fp16"
     enable_tf32: True
     use_ema: False
     seed: 1337

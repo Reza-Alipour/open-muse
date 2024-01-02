@@ -668,18 +668,25 @@ class SegmentationDataset:
     def __init__(
             self,
             per_gpu_batch_size: int,
-            dataset_name: str = 'reza-alipour/MM-CelebA-HQ-Dataset-256',
+            dataset_name: str = 'reza-alipour/M3TM',
             token: str = None
     ):
-        self.ds = load_dataset(dataset_name, token = token)
+        self.ds = load_dataset(dataset_name, token=token)
 
         def custom_collate_fn(batch):
-            is_it_mask = True #random.randint(0, 1) == 1
-            column_name = 'mask' if is_it_mask else 'landmark'
-            # prompt = 'Generate face segmentation | ' if is_it_mask else 'Generate face landmark |'
+            rnd = random.randint(0, 5)
+            if rnd == 0:
+                column_name = 'image'
+                prompt = 'Generate face portrait | '
+            elif rnd in (1, 2, 3):
+                column_name = 'mask'
+                prompt = 'Generate face segmentation | '
+            else:
+                column_name = 'landmark'
+                prompt = 'Generate face landmark | '
 
             def get_single_caption(c1, c2):
-                if random.randint(0,2) == 0:
+                if random.randint(0, 1) == 0:
                     if isinstance(c1, list):
                         return random.choice(c1)
                     else:
@@ -691,25 +698,20 @@ class SegmentationDataset:
 
             masks = [sample[column_name] for sample in batch]
             # captions = [prompt + get_single_caption(sample['captions'],sample['captions_all']) for sample in batch]
-            captions = [get_single_caption(sample['captions_eng'],sample['captions_all']) for sample in batch]
-            # image = transforms.Resize(resolution, interpolation=transforms.InterpolationMode.BILINEAR)(image)
-            # get crop coordinates
-            # if random.random() < 0.3:
-            #     c_top, c_left, _, _ = transforms.RandomCrop.get_params(mask, output_size=(resolution, resolution))
-            #     mask = transforms.functional.crop(mask, c_top, c_left, resolution, resolution)
-            masks = [transforms.ToTensor()(mask.convert('RGB').resize((256,256))) for mask in masks]
+            captions = [prompt + get_single_caption(sample['captions_eng'], sample['captions_all']) for sample in batch]
+            masks = [transforms.ToTensor()(mask.convert('RGB').resize((256, 256))) for mask in masks]
             masks = torch.stack(masks)
             return {'masks': masks, 'captions': captions}
 
         self._train_dataloader = DataLoader(
-            self.ds['train'],
+            self.ds['hq_train'],
             batch_size=per_gpu_batch_size,
             shuffle=True,
             collate_fn=custom_collate_fn
         )
 
         self._eval_dataloader = DataLoader(
-            self.ds['test'],
+            self.ds['hq_test'],
             batch_size=per_gpu_batch_size,
             shuffle=False,
             collate_fn=custom_collate_fn

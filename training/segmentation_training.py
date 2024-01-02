@@ -324,30 +324,26 @@ def generate_images(
     model.eval()
     # fmt: off
     captions = [
-        "This young woman has wavy blond hair, wearing lipstick and earrings. She has an attractive oval face with a slight open mouth.",
-        "این زن جوان با موهای بلوند موج دارش رژ لب و گوشواره می پوشد. چهره بیضی او جذاب است.",
-        "Mit ihrem welligen blonden Haar trägt diese junge Frau Lippenstift und Ohrringe. Ihr ovales Gesicht ist attraktiv.",
-        "Avec ses cheveux blonds ondulés, cette jeune femme porte du rouge à lèvres et des boucles d'oreilles. Son visage ovale est séduisant.",
-        "Con i suoi capelli biondi ondulati, questa giovane donna indossa rossetto e orecchini. Il suo viso ovale è attraente.",
-        "Con su cabello rubio ondulado, esta joven usa lápiz labial y aretes. Su rostro ovalado es atractivo.",
-        "With her wavy blond hair, this young woman wears lipstick and earrings. Her oval face is attractive.",
-        "Her big lips and blonde hair complement her arched eyebrows and heavy makeup, she's smiling.",
-        "This young woman has a big nose and arched eyebrows. She has bags under her eyes.",
-        "Esta joven tiene una nariz grande y cejas arqueadas. Tiene bolsas debajo de los ojos.",
-        "Questa giovane donna ha un grande naso e le sopracciglia arcuate. Ha le borse sotto gli occhi.",
-        "Cette jeune femme a un gros nez et des sourcils arqués. Elle a des poches sous les yeux.",
-        "این زن جوان بینی بزرگ و ابروهای کمانی دارد. زیر چشمش کیسه هایی دارد.",
-        "Diese junge Frau hat eine große Nase und hochgezogene Augenbrauen. Sie hat Tränensäcke unter den Augen.",
-        "This man has narrow eyes, a pointy nose, and bushy eyebrows. He is smiling and has a beard.",
-        "Este hombre tiene ojos entrecerrados, nariz puntiaguda y cejas pobladas. Sonríe y tiene barba.",
-        "Quest'uomo ha gli occhi stretti, il naso a punta e le sopracciglia folte. Sorride e ha la barba.",
-        "Cet homme a les yeux étroits, le nez pointu et les sourcils broussailleux. Il sourit et a une barbe.",
-        "Dieser Mann hat schmale Augen, eine spitze Nase und buschige Augenbrauen. Er lächelt und hat einen Bart.",
-        "این مرد چشمان باریک، بینی نوک تیز و ابروهای پرپشت دارد. او لبخند می زند و ریش دارد.",
-        "Her mouth is slightly open, with high cheekbones giving her an attractive look. Rosy cheeks and heavy makeup enhance her beauty."
-        "This man has a big nose and bags under his eyes. He is clean-shaven and chubby.",
-        "این مرد جوان جذاب کیسه هایی زیر چشمانش و ریش دارد.",
-        "Este hombre tiene una nariz grande y bolsas debajo de los ojos. Está bien afeitado y es gordito.",
+        "Generate face portrait | This young woman has wavy blond hair, wearing lipstick and earrings. She has an attractive oval face with a slight open mouth.",
+        "Generate face segmentation | Mit ihrem welligen blonden Haar trägt diese junge Frau Lippenstift und Ohrringe. Ihr ovales Gesicht ist attraktiv.",
+        "Generate face landmark | Avec ses cheveux blonds ondulés, cette jeune femme porte du rouge à lèvres et des boucles d'oreilles. Son visage ovale est séduisant.",
+        "Generate face segmentation | Con i suoi capelli biondi ondulati, questa giovane donna indossa rossetto e orecchini. Il suo viso ovale è attraente.",
+        "Generate face portrait | Con su cabello rubio ondulado, esta joven usa lápiz labial y aretes. Su rostro ovalado es atractivo.",
+        "Generate face landmark | With her wavy blond hair, this young woman wears lipstick and earrings. Her oval face is attractive.",
+        "Generate face segmentation | Her big lips and blonde hair complement her arched eyebrows and heavy makeup, she's smiling.",
+        "Generate face portrait | This young woman has a big nose and arched eyebrows. She has bags under her eyes.",
+        "Generate face segmentation | Esta joven tiene una nariz grande y cejas arqueadas. Tiene bolsas debajo de los ojos.",
+        "Generate face segmentation | Questa giovane donna ha un grande naso e le sopracciglia arcuate. Ha le borse sotto gli occhi.",
+        "Generate face landmark | Cette jeune femme a un gros nez et des sourcils arqués. Elle a des poches sous les yeux.",
+        "Generate face segmentation | Diese junge Frau hat eine große Nase und hochgezogene Augenbrauen. Sie hat Tränensäcke unter den Augen.",
+        "Generate face portrait | This man has narrow eyes, a pointy nose, and bushy eyebrows. He is smiling and has a beard.",
+        "Generate face segmentation | Este hombre tiene ojos entrecerrados, nariz puntiaguda y cejas pobladas. Sonríe y tiene barba.",
+        "Generate face landmark | Quest'uomo ha gli occhi stretti, il naso a punta e le sopracciglia folte. Sorride e ha la barba.",
+        "Generate face portrait | Cet homme a les yeux étroits, le nez pointu et les sourcils broussailleux. Il sourit et a une barbe.",
+        "Generate face portrait | Dieser Mann hat schmale Augen, eine spitze Nase und buschige Augenbrauen. Er lächelt und hat einen Bart.",
+        "Generate face landmark | Her mouth is slightly open, with high cheekbones giving her an attractive look. Rosy cheeks and heavy makeup enhance her beauty."
+        "Generate face segmentation | This man has a big nose and bags under his eyes. He is clean-shaven and chubby.",
+        "Generate face landmark | Este hombre tiene una nariz grande y bolsas debajo de los ojos. Está bien afeitado y es gordito.",
     ]
     # fmt: on
 
@@ -366,7 +362,7 @@ def generate_images(
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp1500', token=hf_read_token)
+        vq_model = vq_class.from_pretrained('reza-alipour/vqgan', token=hf_read_token)
         weight_dtype = torch.float32
         if accelerator.mixed_precision == "fp16":
             weight_dtype = torch.float16
@@ -562,14 +558,18 @@ def generate_inpainting_images(
 
 
 def inpainting_validation_data():
-    # mask_or_landmark = 'landmark'
-    segment_or_landmark = 'segment'
+    if random.randint(0, 1) == 1:
+        segment_or_landmark = 'segment'
+        prompt = 'Generate face segmentation | '
+    else:
+        segment_or_landmark = 'landmark'
+        prompt = 'Generate face landmark | '
     validation_prompts = []
     validation_images = []
     validation_masks = []
 
     for folder_name in os.listdir("./inpainting_validation"):
-        validation_prompts.append(folder_name)
+        validation_prompts.append(prompt + folder_name)
 
         image = None
         mask = None
@@ -827,7 +827,7 @@ def main():
             raise ValueError(f"Unknown text model type: {config.model.text_encoder.type}")
 
         vq_class = get_vq_model_class(config.model.vq_model.type)
-        vq_model = vq_class.from_pretrained('reza-alipour/vq-tokenizer', revision='ckp3000', token=hf_read_token)
+        vq_model = vq_class.from_pretrained('reza-alipour/vqgan', token=hf_read_token)
 
         # Freeze the text model and VQGAN
         text_encoder.requires_grad_(False)
@@ -913,10 +913,12 @@ def main():
         {
             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": optimizer_config.weight_decay,
+            "lr": learning_rate,
         },
         {
             "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
             "weight_decay": 0.0,
+            "lr": learning_rate,
         },
     ]
 
@@ -957,7 +959,6 @@ def main():
 
     dataset = SegmentationDataset(
         per_gpu_batch_size=config.training.batch_size,
-        dataset_name='reza-alipour/CelebA-HQ',
         token=hf_read_token
     )
     train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader

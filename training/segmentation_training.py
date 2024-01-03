@@ -1371,18 +1371,19 @@ def main():
                         empty_clip_embeds=empty_clip_embeds,
                     )
 
-                    generate_inpainting_images(
-                        model,
-                        vq_model,
-                        text_encoder,
-                        tokenizer,
-                        accelerator,
-                        config,
-                        global_step + 1,
-                        mask_schedule=mask_schedule,
-                        empty_embeds=empty_embeds,
-                        empty_clip_embeds=empty_clip_embeds,
-                    )
+
+                    # generate_inpainting_images(
+                    #     model,
+                    #     vq_model,
+                    #     text_encoder,
+                    #     tokenizer,
+                    #     accelerator,
+                    #     config,
+                    #     global_step + 1,
+                    #     mask_schedule=mask_schedule,
+                    #     empty_embeds=empty_embeds,
+                    #     empty_clip_embeds=empty_clip_embeds,
+                    # )
 
                     if config.training.get("use_ema", False):
                         # Switch back to the original model parameters for training.

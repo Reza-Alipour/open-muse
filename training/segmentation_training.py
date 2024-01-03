@@ -341,7 +341,7 @@ def generate_images(
         "Generate face landmark | Quest'uomo ha gli occhi stretti, il naso a punta e le sopracciglia folte. Sorride e ha la barba.",
         "Generate face portrait | Cet homme a les yeux étroits, le nez pointu et les sourcils broussailleux. Il sourit et a une barbe.",
         "Generate face portrait | Dieser Mann hat schmale Augen, eine spitze Nase und buschige Augenbrauen. Er lächelt und hat einen Bart.",
-        "Generate face landmark | Her mouth is slightly open, with high cheekbones giving her an attractive look. Rosy cheeks and heavy makeup enhance her beauty."
+        "Generate face landmark | Her mouth is slightly open, with high cheekbones giving her an attractive look. Rosy cheeks and heavy makeup enhance her beauty.",
         "Generate face segmentation | This man has a big nose and bags under his eyes. He is clean-shaven and chubby.",
         "Generate face landmark | Este hombre tiene una nariz grande y bolsas debajo de los ojos. Está bien afeitado y es gordito.",
     ]

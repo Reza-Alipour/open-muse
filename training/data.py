@@ -674,11 +674,11 @@ class SegmentationDataset:
         self.ds = load_dataset(dataset_name, token=token)
 
         def custom_collate_fn(batch):
-            rnd = random.randint(0, 5)
+            rnd = random.randint(0, 2)
             if rnd == 0:
                 column_name = 'image'
                 prompt = 'Generate face portrait | '
-            elif rnd in (1, 2, 3):
+            elif rnd == 1:
                 column_name = 'mask'
                 prompt = 'Generate face segmentation | '
             else:

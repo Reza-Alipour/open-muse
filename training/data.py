@@ -29,6 +29,7 @@ import PIL
 import torch
 import webdataset as wds
 import yaml
+from PIL import Image
 from braceexpand import braceexpand
 from datasets import load_dataset
 from torch.utils.data import default_collate, DataLoader
@@ -699,7 +700,9 @@ class SegmentationDataset:
                 else:
                     return c2
 
-            masks = [sample[column_name] for sample in batch]
+            should_flip = random.randint(0, 1)
+            masks = [sample[column_name].transpose(Image.FLIP_LEFT_RIGHT) if should_flip else sample[column_name] for
+                     sample in batch]
             # captions = [prompt + get_single_caption(sample['captions'],sample['captions_all']) for sample in batch]
             captions = [prompt + get_single_caption(sample['captions_eng'], sample['captions_all']) for sample in batch]
             masks = [transforms.ToTensor()(mask.convert('RGB').resize((256, 256))) for mask in masks]

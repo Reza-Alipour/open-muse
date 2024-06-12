@@ -669,11 +669,11 @@ class SegmentationDataset:
             self,
             per_gpu_batch_size: int,
             dataset_name: str = 'reza-alipour/MM-CelebA-HQ-Dataset-256'):
-        self.ds = load_dataset(dataset_name)
+        self.ds = load_dataset(dataset_name)['train'].train_test_split(train_size=0.95,seed=2383)
 
         def custom_collate_fn(batch):
             masks = [sample['mask'] for sample in batch]
-            captions = [sample['captions'] for sample in batch]
+            # captions = [sample['captions'] for sample in batch]
             # image = transforms.Resize(resolution, interpolation=transforms.InterpolationMode.BILINEAR)(image)
             # get crop coordinates
             # if random.random() < 0.3:
@@ -681,7 +681,7 @@ class SegmentationDataset:
             #     mask = transforms.functional.crop(mask, c_top, c_left, resolution, resolution)
             masks = [transforms.ToTensor()(mask.convert('RGB')) for mask in masks]
             masks = torch.stack(masks)
-            return {'masks': masks, 'captions': captions}
+            return {'masks': masks}
 
         self._train_dataloader = DataLoader(
             self.ds['train'],

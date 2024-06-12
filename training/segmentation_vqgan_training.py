@@ -19,25 +19,26 @@ import os
 import time
 from pathlib import Path
 from typing import Any, List, Tuple
-from ema import EMAModel
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 import wandb
+from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, set_seed
-from data import ClassificationDataset
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from optimizer import Lion
-from PIL import Image
 from torch.optim import AdamW  # why is shampoo not available in PT :(
 
 import muse
-from muse import MOVQ, MaskGitTransformer, MaskGitVQGAN, VQGANModel
+from data import SegmentationDataset
+from ema import EMAModel
+from muse import MOVQ, MaskGitVQGAN, VQGANModel
 from muse.lr_schedulers import get_scheduler
-from muse.sampling import cosine_schedule
-from training.discriminator import Discriminator
+from optimizer import Lion
+from discriminator import Discriminator
+
 try:
     import apex
 
@@ -47,7 +48,6 @@ except ImportError:
 import timm
 from einops import repeat, rearrange
 from tqdm import tqdm
-
 
 logger = get_logger(__name__, log_level="INFO")
 
@@ -121,6 +121,7 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
+
 def _map_layer_to_idx(backbone, layers, offset=0):
     """Maps set of layer names to indices of model. Ported from anomalib
 
@@ -136,12 +137,13 @@ def _map_layer_to_idx(backbone, layers, offset=0):
     )
     for i in layers:
         try:
-            idx.append(list(dict(features.named_children()).keys()).index(i)-offset)
+            idx.append(list(dict(features.named_children()).keys()).index(i) - offset)
         except ValueError:
             raise ValueError(
                 f"Layer {i} not found in model {backbone}. Select layer from {list(dict(features.named_children()).keys())}. The network architecture is {features}"
             )
     return idx
+
 
 # From https://arxiv.org/abs/2111.01007v1 Projected Gan where instead of giving the discriminator/generator the input image, we give hierarchical features
 # from a timm model
@@ -153,6 +155,7 @@ class MultiLayerTimmModel(torch.nn.Module):
         self.image_sizes = []
         self.max_feats = self.get_layer_widths(input_shape)
         self.max_feature_sizes = (self.max_feats, self.max_feats)
+
     def get_layer_widths(self, shape=(3, 224, 224)):
         output = []
         batch_size = 1
@@ -162,6 +165,7 @@ class MultiLayerTimmModel(torch.nn.Module):
             output.append(output_feat.shape[-1])
         max_feats = max(output)
         return max_feats
+
     def forward(self, images):
         features = self.model(images)
         output_features = []
@@ -171,6 +175,7 @@ class MultiLayerTimmModel(torch.nn.Module):
             else:
                 output_features.append(F.interpolate(feature, size=self.max_feature_sizes))
         return torch.cat(output_features, dim=1)
+
 
 def get_perceptual_loss(pixel_values, fmap, timm_discriminator):
     img_timm_discriminator_input = pixel_values
@@ -199,6 +204,7 @@ def get_perceptual_loss(pixel_values, fmap, timm_discriminator):
     perceptual_loss /= len(img_timm_discriminator_feats)
     return perceptual_loss
 
+
 def grad_layer_wrt_loss(loss, layer):
     return torch.autograd.grad(
         outputs=loss,
@@ -206,6 +212,7 @@ def grad_layer_wrt_loss(loss, layer):
         grad_outputs=torch.ones_like(loss),
         retain_graph=True,
     )[0].detach()
+
 
 def gradient_penalty(images, output, weight=10):
     gradients = torch.autograd.grad(
@@ -219,6 +226,7 @@ def gradient_penalty(images, output, weight=10):
 
     gradients = rearrange(gradients, "b ... -> b (...)")
     return weight * ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+
 
 def main():
     #########################
@@ -237,8 +245,9 @@ def main():
         gradient_accumulation_steps=config.training.gradient_accumulation_steps,
         mixed_precision=config.training.mixed_precision,
         log_with="wandb",
-        logging_dir=config.experiment.logging_dir,
-        split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes.
+        project_dir=config.experiment.logging_dir,
+        split_batches=True,
+        # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes.
     )
 
     if accelerator.distributed_type == DistributedType.DEEPSPEED:
@@ -308,7 +317,7 @@ def main():
 
     discriminator = Discriminator(config)
     # TODO: Add timm_discriminator_backend to config.training. Set default to vgg16
-    idx = _map_layer_to_idx(config.training.timm_discriminator_backend,\
+    idx = _map_layer_to_idx(config.training.timm_discriminator_backend, \
                             config.training.timm_disc_layers.split("|"), config.training.timm_discr_offset)
 
     timm_discriminator = timm.create_model(
@@ -329,10 +338,10 @@ def main():
     learning_rate = optimizer_config.learning_rate
     if optimizer_config.scale_lr:
         learning_rate = (
-            learning_rate
-            * config.training.batch_size
-            * accelerator.num_processes
-            * config.training.gradient_accumulation_steps
+                learning_rate
+                * config.training.batch_size
+                * accelerator.num_processes
+                * config.training.gradient_accumulation_steps
         )
 
     optimizer_type = config.optimizer.name
@@ -368,30 +377,32 @@ def main():
     #################################
     logger.info("Creating dataloaders and lr_scheduler")
 
-    total_batch_size_without_accum = config.training.batch_size * accelerator.num_processes
+    # total_batch_size_without_accum = config.training.batch_size * accelerator.num_processes
     total_batch_size = (
-        config.training.batch_size * accelerator.num_processes * config.training.gradient_accumulation_steps
+            config.training.batch_size * accelerator.num_processes * config.training.gradient_accumulation_steps
     )
 
     # DataLoaders creation:
     # We use webdataset for data loading. The dataloaders are created with sampling with replacement.
     # We don't do dataset resuming here, instead we resample the shards and buffer each time. The sampling is stochastic.
     # This means that the dataloading is not deterministic, but it's fast and efficient.
-    preproc_config = config.dataset.preprocessing
-    dataset_config = config.dataset.params
-    dataset = ClassificationDataset(
-        train_shards_path_or_url=dataset_config.train_shards_path_or_url,
-        eval_shards_path_or_url=dataset_config.eval_shards_path_or_url,
-        num_train_examples=config.experiment.max_train_examples,
+    # dataset = ClassificationDataset(
+    #     train_shards_path_or_url=dataset_config.train_shards_path_or_url,
+    #     eval_shards_path_or_url=dataset_config.eval_shards_path_or_url,
+    #     num_train_examples=config.experiment.max_train_examples,
+    #     per_gpu_batch_size=config.training.batch_size,
+    #     global_batch_size=total_batch_size_without_accum,
+    #     num_workers=dataset_config.num_workers,
+    #     resolution=preproc_config.resolution,
+    #     center_crop=preproc_config.center_crop,
+    #     random_flip=preproc_config.random_flip,
+    #     shuffle_buffer_size=dataset_config.shuffle_buffer_size,
+    #     pin_memory=dataset_config.pin_memory,
+    #     persistent_workers=dataset_config.persistent_workers,
+    # )
+    dataset = SegmentationDataset(
         per_gpu_batch_size=config.training.batch_size,
-        global_batch_size=total_batch_size_without_accum,
-        num_workers=dataset_config.num_workers,
-        resolution=preproc_config.resolution,
-        center_crop=preproc_config.center_crop,
-        random_flip=preproc_config.random_flip,
-        shuffle_buffer_size=dataset_config.shuffle_buffer_size,
-        pin_memory=dataset_config.pin_memory,
-        persistent_workers=dataset_config.persistent_workers,
+        dataset_name='reza-alipour/vq-train'
     )
     train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
 
@@ -408,17 +419,22 @@ def main():
         num_warmup_steps=config.lr_scheduler.params.warmup_steps,
     )
 
-
     # Prepare everything with accelerator
     logger.info("Preparing model, optimizer and dataloaders")
     # The dataloader are already aware of distributed training, so we don't need to prepare them.
-    model, discriminator, optimizer, discr_optimizer, lr_scheduler, discr_lr_scheduler = accelerator.prepare(model, discriminator, optimizer, discr_optimizer, lr_scheduler, discr_lr_scheduler)
+    model, discriminator, optimizer, discr_optimizer, lr_scheduler, discr_lr_scheduler = accelerator.prepare(model,
+                                                                                                             discriminator,
+                                                                                                             optimizer,
+                                                                                                             discr_optimizer,
+                                                                                                             lr_scheduler,
+                                                                                                             discr_lr_scheduler)
 
     if config.training.overfit_one_batch:
         train_dataloader = [next(iter(train_dataloader))]
 
+    num_batches = math.ceil(len(train_dataloader.dataset) / train_dataloader.batch_size)
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-    num_update_steps_per_epoch = math.ceil(train_dataloader.num_batches / config.training.gradient_accumulation_steps)
+    num_update_steps_per_epoch = math.ceil(num_batches / config.training.gradient_accumulation_steps)
     # Afterwards we recalculate our number of training epochs.
     # Note: We are not doing epoch based training here, but just using this for book keeping and being able to
     # reuse the same training loop with other datasets/loaders.
@@ -428,7 +444,7 @@ def main():
     logger.info("***** Running training *****")
     logger.info(f"  Num training steps = {config.training.max_train_steps}")
     logger.info(f"  Gradient Accumulation steps = {config.training.gradient_accumulation_steps}")
-    logger.info(f"  Instantaneous batch size per device = { config.training.batch_size}")
+    logger.info(f"  Instantaneous batch size per device = {config.training.batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     global_step = 0
     first_epoch = 0
@@ -472,14 +488,15 @@ def main():
     for epoch in range(first_epoch, num_train_epochs):
         model.train()
         for i, batch in tqdm(enumerate(train_dataloader)):
-            pixel_values, _ = batch
+            pixel_values = batch['masks']
             pixel_values = pixel_values.to(accelerator.device, non_blocking=True)
             data_time_m.update(time.time() - end)
-            generator_step = ((i // config.training.gradient_accumulation_steps) % 2) == 0 and i > config.training.discriminator_warmup
+            generator_step = ((
+                                          i // config.training.gradient_accumulation_steps) % 2) == 0 and i > config.training.discriminator_warmup
             # TODO:
             # Add entropy to maximize codebook usage
             # Train Step
-            # The behavior of accelerator.accumulate is to 
+            # The behavior of accelerator.accumulate is to
             # 1. Check if gradients are synced(reached gradient-accumulation_steps)
             # 2. If so sync gradients by stopping the not syncing process
             if generator_step:
@@ -511,11 +528,11 @@ def main():
                     norm_grad_wrt_perceptual_loss = grad_layer_wrt_loss(perceptual_loss, last_dec_layer).norm(p=2)
                     norm_grad_wrt_gen_loss = grad_layer_wrt_loss(gen_loss, last_dec_layer).norm(p=2)
 
-                    adaptive_weight = norm_grad_wrt_perceptual_loss/norm_grad_wrt_gen_loss.clamp(min=1e-8)
+                    adaptive_weight = norm_grad_wrt_perceptual_loss / norm_grad_wrt_gen_loss.clamp(min=1e-8)
                     adaptive_weight = adaptive_weight.clamp(max=1e4)
                     loss += commit_loss
                     loss += perceptual_loss
-                    loss += adaptive_weight*gen_loss
+                    loss += adaptive_weight * gen_loss
                     # Gather thexd losses across all processes for logging (if we use distributed training).
                     avg_gen_loss = accelerator.gather(loss.repeat(config.training.batch_size)).float().mean()
                     accelerator.backward(loss)
@@ -527,9 +544,9 @@ def main():
                     lr_scheduler.step()
                     # log gradient norm before zeroing it
                     if (
-                        accelerator.sync_gradients
-                        and (global_step + 1) % config.experiment.log_grad_norm_every == 0
-                        and accelerator.is_main_process
+                            accelerator.sync_gradients
+                            and (global_step + 1) % config.experiment.log_grad_norm_every == 0
+                            and accelerator.is_main_process
                     ):
                         log_grad_norm(model, accelerator, global_step + 1)
             else:
@@ -551,9 +568,9 @@ def main():
                     discr_optimizer.step()
                     discr_lr_scheduler.step()
                     if (
-                        accelerator.sync_gradients
-                        and (global_step + 1) % config.experiment.log_grad_norm_every == 0
-                        and accelerator.is_main_process
+                            accelerator.sync_gradients
+                            and (global_step + 1) % config.experiment.log_grad_norm_every == 0
+                            and accelerator.is_main_process
                     ):
                         log_grad_norm(discriminator, accelerator, global_step + 1)
             # Checks if the accelerator has performed an optimization step behind the scenes
@@ -566,7 +583,7 @@ def main():
                 # Log metrics
                 if (global_step + 1) % config.experiment.log_every == 0:
                     samples_per_second_per_gpu = (
-                        config.training.gradient_accumulation_steps * config.training.batch_size / batch_time_m.val
+                            config.training.gradient_accumulation_steps * config.training.batch_size / batch_time_m.val
                     )
                     logs = {
                         "step_discr_loss": avg_discr_loss.item(),
@@ -597,7 +614,8 @@ def main():
 
                 # Generate images
                 if (global_step + 1) % config.experiment.generate_every == 0 and accelerator.is_main_process:
-                    generate_images(model, pixel_values[:config.training.num_validation_log], accelerator, global_step + 1)
+                    generate_images(model, pixel_values[:config.training.num_validation_log], accelerator,
+                                    global_step + 1)
 
                 global_step += 1
                 # TODO: Add generation
@@ -620,7 +638,6 @@ def main():
         model.save_pretrained(config.experiment.output_dir)
 
     accelerator.end_training()
-
 
 
 @torch.no_grad()
